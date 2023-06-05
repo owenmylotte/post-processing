@@ -429,22 +429,24 @@ if __name__ == "__main__":
         except yaml.YAMLError as exc:
             print(exc)
 
-    if input['deltaT'] is None:
+    if 'deltaT' in input and input['deltaT'] is None:
         input['deltaT'] = 0.004
 
-    if input['write_path'] is not None:
+    if 'write_path' in input and input['write_path'] is not None:
         write_path = input['write_path']
     else:
         write_path = input['base_path'] + "/figures"
 
-    if input['save'] is None:
-        input['save'] = True
+    if 'save' in input and input['save'] is None:
+        save = True
+    else:
+        save = False
 
     if not os.path.exists(write_path):
         os.makedirs(write_path)
 
     vTCP = VTcpData(input['hdf5_file'], input['fields'], input['tcp_axis'], input['base_path'], write_path,
-                    input['save'])
+                    save)
 
     print(len(vTCP.data[0, :, 0]))
 
@@ -452,16 +454,6 @@ if __name__ == "__main__":
     vTCP.get_uncertainty_field(data_3d)
     vTCP.get_optical_thickness(data_3d)
 
-    # Calculate the difference between the DNS temperature and the tcp temperature
-    for i in range(np.shape(vTCP.data)[1]):
-        vTCP.plot_optical_thickness(i)
-    for i in range(np.shape(vTCP.data)[1]):
-        vTCP.plot_uncertainty_field(i)
-
-    # vTCP.plot_line_of_sight(50, data_3d)
-
-    # It would be worth correlating the uncertainty field to something non-dimensional
-    # Or at least related to the flame structure so that it can be generalized
-    # Maybe the mixture fraction is an appropriate value?
+    vTCP.plot_line_of_sight(50, data_3d)
 
     print('Done')
