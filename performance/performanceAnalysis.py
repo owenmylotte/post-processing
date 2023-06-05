@@ -31,6 +31,7 @@ class PerformanceAnalysis:
         self.rays = rays
         self.set_plot_parameters()
         self.processes_mesh, self.problems_mesh = np.meshgrid(self.processes, self.cell_size)
+        self.models = [self.communication_function, self.ray_collapse_function, self.segment_evaluation_function, self.ray_recombination_function]
 
     @staticmethod
     def r_squared_func(y, y_fit):
@@ -49,6 +50,7 @@ class PerformanceAnalysis:
 
     @staticmethod
     def communication_function(d, p, c, r, alpha, beta, f, g):
+        d = 1
         return alpha * np.log2(p) + r * (c ** ((d - 1) / d)) * (
                 p ** (1 / d)) * 2 * beta
 
@@ -307,13 +309,16 @@ class PerformanceAnalysis:
         # Initialization Strong scaling analysis
         plt.figure(figsize=(6, 4), num=4)
         # Constant parameters
-        d = 1
-        c = 50000
-        r = 30
 
         for e in range(len(self.events)):
+            model = self.models[e]
             for n in range(len(self.rays)):
                 for i in range(len(self.faces)):
+
+                    d = 1
+                    c = 50000
+                    r = 30
+
                     mask = np.isfinite(self.times[e, n, :, i])
                     x = self.processes[mask]
                     y = self.times[e, n, mask, i]
@@ -324,11 +329,14 @@ class PerformanceAnalysis:
                     # use curve_fit function to fit data
                     # the function ray_recombination_function should have two arguments: the x values and the parameters to be fitted
                     params_opt, params_cov = curve_fit(
-                        lambda x, alpha, beta, f, g: self.ray_recombination_function(d, x, c, r, alpha, beta, f, g),
-                        x, y, p0=init_guess)
+                        lambda x, alpha, beta, f, g: model(d, x, c, r, alpha, beta, f, g),
+                        x, y, p0=init_guess, bounds=(0, np.inf))
+
+                    print(
+                        f"Optimal parameters for event {self.events[e]} are: alpha={params_opt[0]}, beta={params_opt[1]}, f={params_opt[2]}, g={params_opt[3]}")
 
                     # generate y-values based on the fit
-                    y_fit = self.ray_recombination_function(d, x, c, r, *params_opt)
+                    y_fit = model(d, x, c, r, *params_opt)
 
                     plt.loglog(x, y, linewidth=1, marker=self.colorarray[i], c="black", markersize=4)
                     # plot fitted curve with a different color or line style
@@ -337,7 +345,8 @@ class PerformanceAnalysis:
         plt.yticks(fontsize=10)
         plt.xticks(fontsize=10)
         plt.xlabel(r'MPI Processes', fontsize=10)
-        plt.ylabel(r'Speedup', fontsize=10)
+        plt.ylabel(r'Time', fontsize=10)
+        # plt.legend(self.events)
 
         if not os.path.exists(self.write_path + "/figures"):
             os.makedirs(self.write_path + "/figures")

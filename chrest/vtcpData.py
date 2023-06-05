@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.gridspec as gridspec
 from chrest.chrestData import ChrestData
 import os
+import yaml
 
 plt.rcParams["font.family"] = "Noto Serif CJK JP"
 
@@ -414,56 +415,40 @@ class VTcpData:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description='Generate plots from virtual TCP data. '
-                    'See https://github.com/cet-lab/experimental-post-processing/wiki'
-                    '/Matlab-To-XdmfGenerator for details.  ')
-    parser.add_argument('--base_path', dest='base_path', type=str, required=True,
-                        help='The path to the ablate hdf5 file(s) containing the ablate data.'
-                             '  A wild card can be used '
-                             'to supply more than one file.')
-    parser.add_argument('--file', dest='hdf5_file', type=str, required=True,
-                        help='The path to the ablate hdf5 file(s) containing the ablate data.'
-                             '  A wild card can be used '
-                             'to supply more than one file.')
-    parser.add_argument('--fields', dest='fields', type=str, nargs="+",
-                        help='List of intensity fields in RGB order.', required=True)
-    parser.add_argument('--start', dest='n_start', type=int,
-                        help='Which index to start the data processing.')
-    parser.add_argument('--end', dest='n_end', type=int,
-                        help='Which index to finish the data processing.')
-    parser.add_argument('--exposure_time', dest='deltaT', type=float,
-                        help='Impacts the saturation of the virtual camera.', required=False)
-    parser.add_argument('--name', dest='name', type=str,
-                        help='What to call the outputs.', required=True)
-    parser.add_argument('--dns', dest='dns', type=str,
-                        help='Path to the volumetric DNS data.', required=True)
-    parser.add_argument('--tcp_axis', dest='tcp_axis', type=str,
-                        help='Direction of the tcp axis.', required=True)
-    parser.add_argument('--write_path', dest='write_path', type=str, required=False,
-                        help='Path to save figures to.')
-    parser.add_argument('--save', dest='save', type=bool, required=False,
-                        help='Event names to measure.')
 
+    # Initialize argument parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', dest='input_path', type=str, required=True,
+                        help='The path to the YAML input file.')
     args = parser.parse_args()
-    if args.deltaT is None:
-        args.deltaT = 0.004
-    if args.write_path is not None:
-        write_path = args.write_path
+
+    # Load configuration from YAML file
+    with open(args.input_path, 'r') as stream:
+        try:
+            input = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+
+    if input['deltaT'] is None:
+        input['deltaT'] = 0.004
+
+    if input['write_path'] is not None:
+        write_path = input['write_path']
     else:
-        write_path = args.base_path + "/figures"
-    if args.save is None:
-        args.save = True
+        write_path = input['base_path'] + "/figures"
+
+    if input['save'] is None:
+        input['save'] = True
+
     if not os.path.exists(write_path):
         os.makedirs(write_path)
 
-    vTCP = VTcpData(args.hdf5_file, args.fields, args.tcp_axis, args.base_path, write_path, args.save)  # Initialize
-    # the virtual TCP creation.
+    vTCP = VTcpData(input['hdf5_file'], input['fields'], input['tcp_axis'], input['base_path'], write_path,
+                    input['save'])
 
     print(len(vTCP.data[0, :, 0]))
 
-    # Get the CHREST data associated with the simulation for the 3D stuff
-    data_3d = ChrestData(args.base_path + "/" + args.dns)
+    data_3d = ChrestData(input['base_path'] + "/" + input['dns'])
     vTCP.get_uncertainty_field(data_3d)
     vTCP.get_optical_thickness(data_3d)
 
