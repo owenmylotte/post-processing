@@ -132,7 +132,7 @@ class VTcpData:
         )
 
     def get_dns_soot(self, dns_data):
-        dns_density_yi, _, _ = dns_data.get_field("densityYi")
+        dns_density_yi, _, _ = dns_data.get_field("Yi")
         self.dns_soot = dns_density_yi / self.rhoC
 
     def plot_temperature_step(self, n, name):
@@ -165,12 +165,12 @@ class VTcpData:
         # print(np.mean(tcp_temperature_filtered))
 
     def set_limits(self):
-        if args.n_end:
-            self.end = args.n_end
+        if 'end' in input:
+            self.end = input['end']
         else:
             self.end = len(self.data[:, 0]) - 1  # Set the end time to the last step by default
-        if args.n_start:
-            self.start = args.n_start
+        if 'start' in input:
+            self.start = input['start']
         else:
             self.start = 0  # Set the start time step to the first by default
 
@@ -246,7 +246,7 @@ class VTcpData:
 
         # Now that we have the tcp temperature, we want to get the maximum temperatures in each of the ray lines.
         dns_temperature, _, _ = dns_data.get_field("temperature")
-        dns_soot, _, _ = dns_data.get_field("densityYi")
+        dns_soot, _, _ = dns_data.get_field("Yi")
         self.dns_maximum_temperature = dns_temperature.max(axis=(self.tcp_axis + 1), keepdims=True)
         self.dns_maximum_soot = dns_soot.max(axis=(self.tcp_axis + 1), keepdims=True)
         self.temperature_error = np.abs(self.dns_maximum_temperature - self.tcp_temperature)

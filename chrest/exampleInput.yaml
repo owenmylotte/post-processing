@@ -2,9 +2,9 @@ fields:
   - red
   - green
   - blue
-hdf5_file: "/Users/owen/Documents/chrest_formatted_test_case/boundaryFacesFront_radiationFluxMonitor..chrest.*.hdf5"
+hdf5_file: "boundaryFacesFront_radiationFluxMonitor..chrest/boundaryFacesFront_radiationFluxMonitor..chrest.*.hdf5"
 deltaT: 0.0004
 name: "hello"
-dns: "/Users/owen/Documents/chrest_formatted_test_case/domain..chrest/domain..*.hdf5"
+dns: "domain..chrest/domain..*.hdf5"
 tcp_axis: "x"
-base_path: "/Users/owen/PycharmProjects/post-processing/chrest"
+base_path: "/Users/owen/Documents/chrest_formatted_test_case"
