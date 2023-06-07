@@ -398,12 +398,15 @@ class VTcpData:
         if self.tcp_soot is None:
             self.get_tcp_soot()
 
+        if self.dns_optical_thickness is None:
+            self.get_optical_thickness(data_3d)
+
         # Plot temperature along the line of sight
         ax[0].scatter(x[:, :, :, 2], dns_temperature[n, :, :, :], color='k', marker='.', label='Temperature')
         ax[0].axhline(y=self.tcp_temperature.mean(), color='r', linestyle='-', label='Mean TCP Temperature')
-        [ax[0].axhline(y=i, color='b', linestyle='-', label='Standard Deviation TCP Temperature') for i in
-         [self.tcp_temperature.mean() + np.std(self.tcp_temperature),
-          self.tcp_temperature.mean() - np.std(self.tcp_temperature)]]
+        [ax[0].axhline(y=i, color='b', linestyle='-', label=('Standard Deviation TCP Temperature' if i == 0 else None))
+         for i in [self.tcp_temperature.mean() + np.std(self.tcp_temperature),
+                   self.tcp_temperature.mean() - np.std(self.tcp_temperature)]]
         ax[0].set_title("Temperature along the line of sight")
         ax[0].set_ylabel("Temperature [K]")
         ax[0].legend()
@@ -412,9 +415,10 @@ class VTcpData:
         # Plot soot volume fraction along the line of sight
         ax[1].scatter(x[:, :, :, 2], self.dns_soot[n, :, :, :], color='k', marker='.', label='Soot Volume Fraction')
         ax[1].axhline(y=self.tcp_soot.mean(), color='r', linestyle='-', label='Mean TCP Soot')
-        [ax[1].axhline(y=i, color='b', linestyle='-', label='Standard Deviation TCP Soot') for i in
-         [self.tcp_soot.mean() + np.mean(abs(self.tcp_soot - self.tcp_soot.mean()) ** 2),
-          self.tcp_soot.mean() - np.mean(abs(self.tcp_soot - self.tcp_soot.mean()) ** 2)]]
+        [ax[1].axhline(y=i, color='b', linestyle='-', label=('Standard Deviation TCP Soot' if i == 0 else None)) for i
+         in
+         [self.tcp_soot.mean() + np.std(self.tcp_soot),
+          self.tcp_soot.mean() - np.std(self.tcp_soot)]]
         ax[1].set_title("Soot volume fraction along the line of sight")
         ax[1].set_ylabel("Soot Volume Fraction")
         ax[1].legend()
@@ -428,7 +432,14 @@ class VTcpData:
         ax[2].set_title("Absorption coefficient along the line of sight")
         ax[2].set_xlabel("Position along the line of sight")
         ax[2].set_ylabel("Absorption Coefficient")
+        ax[2].axhline(y=self.dns_optical_thickness.mean(), color='r', linestyle='-', label='Mean DNS Optical Thickness')
+        [ax[2].axhline(y=i, color='b', linestyle='-',
+                       label=('Standard Deviation Optical Thickness' if i == 0 else None)) for i
+         in
+         [self.dns_optical_thickness.mean() + np.std(self.dns_optical_thickness),
+          self.dns_optical_thickness.mean() - np.std(self.dns_optical_thickness)]]
         ax[2].legend()
+        ax[2].set_ylim(0, kappa.max() * 1.1)
 
         plt.tight_layout()
         if self.save:
