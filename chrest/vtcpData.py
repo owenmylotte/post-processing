@@ -12,7 +12,8 @@ plt.rcParams["font.family"] = "Noto Serif CJK JP"
 
 class VTcpData:
 
-    def __init__(self, files=None, fields=None, tcp_axis=None, base_path=None, write_path=None, save=None):
+    def __init__(self, files=None, fields=None, tcp_axis=None, base_path=None, write_path=None,
+                 dns_temperature_name=None, dns_soot_name=None, save=None):
         h = 6.62607004e-34
         c = 299792458
         k = 1.380622e-23
@@ -23,13 +24,17 @@ class VTcpData:
         self.base_path = base_path
         self.write_path = write_path
         self.tcp_soot = None
-        self.dns_soot = None
-        self.dns_optical_thickness = None
         self.save = save
         self.soot_error = None
         self.temperature_error = None
+
+        self.dns_soot = None
+        self.dns_optical_thickness = None
         self.dns_maximum_temperature = None
         self.dns_maximum_soot = None
+        self.dns_temperature_name = dns_temperature_name
+        self.dns_soot_name = dns_soot_name
+
         self.prf = None
         self.rhoC = 2000  # [kg / m^3]
         self.field_size = len(fields)
@@ -109,7 +114,7 @@ class VTcpData:
     def get_optical_thickness(self, dns_data):
         # Calculate the optical thickness of the frame
         # First get the absorption for each cell in the dns
-        dns_temperature, _, _ = dns_data.get_field("temperature")
+        dns_temperature, _, _ = dns_data.get_field(self.dns_temperature_name)
         if self.dns_soot is None:
             self.get_dns_soot(dns_data)
         kappa = (3.72 * self.dns_soot * self.C_0 * dns_temperature) / self.C_2  # Soot mean absorption
@@ -132,7 +137,7 @@ class VTcpData:
         )
 
     def get_dns_soot(self, dns_data):
-        dns_density_yi, _, _ = dns_data.get_field("Yi")
+        dns_density_yi, _, _ = dns_data.get_field(self.dns_soot_name)
         self.dns_soot = dns_density_yi / self.rhoC
 
     def plot_temperature_step(self, n, name):
@@ -245,8 +250,8 @@ class VTcpData:
             self.get_tcp_soot()  # Calculate the TCP temperature of the given boundary intensities
 
         # Now that we have the tcp temperature, we want to get the maximum temperatures in each of the ray lines.
-        dns_temperature, _, _ = dns_data.get_field("temperature")
-        dns_soot, _, _ = dns_data.get_field("Yi")
+        dns_temperature, _, _ = dns_data.get_field(self.dns_temperature_name)
+        dns_soot, _, _ = dns_data.get_field(self.dns_soot_name)
         self.dns_maximum_temperature = dns_temperature.max(axis=(self.tcp_axis + 1), keepdims=True)
         self.dns_maximum_soot = dns_soot.max(axis=(self.tcp_axis + 1), keepdims=True)
         self.temperature_error = np.abs(self.dns_maximum_temperature - self.tcp_temperature)
@@ -381,28 +386,29 @@ class VTcpData:
         fig, ax = plt.subplots(3, 1, figsize=(10, 15))
 
         # Create an array for the x-axis.
-        x = data_3d.grid
-        x = np.transpose(x, (1, 2, 0))
+        x = data_3d.get_coordinates()
 
-        dns_temperature, _, _ = data_3d.get_field("temperature")
+        dns_temperature, _, _ = data_3d.get_field(self.dns_temperature_name)
+        if (self.dns_soot is None):
+            self.get_dns_soot(data_3d)
 
         # Plot temperature along the line of sight
-        ax[0].scatter(x, dns_temperature[n, :, :, :], color='r', label='Temperature')
+        ax[0].scatter(x[:, :, :, 2], dns_temperature[n, :, :, :], color='r', label='Temperature')
         ax[0].set_title("Temperature along the line of sight")
         ax[0].set_ylabel("Temperature [K]")
         ax[0].legend()
 
         # Plot soot volume fraction along the line of sight
-        ax[1].scatter(x, self.dns_soot[n, :, :, :], color='b', label='Soot Volume Fraction')
+        ax[1].scatter(x[:, :, :, 2], self.dns_soot[n, :, :, :], color='b', label='Soot Volume Fraction')
         ax[1].set_title("Soot volume fraction along the line of sight")
         ax[1].set_ylabel("Soot Volume Fraction")
         ax[1].legend()
 
         # Calculate the absorption for each cell in the line of sight
-        kappa = (3.72 * self.dns_soot[n, :, :, :] * self.C_0 * self.dns_temperature[n, :, :, :]) / self.C_2
+        kappa = (3.72 * self.dns_soot[n, :, :, :] * self.C_0 * dns_temperature[n, :, :, :]) / self.C_2
 
         # Plot absorption coefficient along the line of sight
-        ax[2].scatter(x, kappa, color='g', label='Absorption Coefficient')
+        ax[2].scatter(x[:, :, :, 2], kappa, color='g', label='Absorption Coefficient')
         ax[2].set_title("Absorption coefficient along the line of sight")
         ax[2].set_xlabel("Position along the line of sight")
         ax[2].set_ylabel("Absorption Coefficient")
@@ -429,30 +435,31 @@ if __name__ == "__main__":
         except yaml.YAMLError as exc:
             print(exc)
 
-    if 'deltaT' in input and input['deltaT'] is None:
+    if 'deltaT' not in input:
         input['deltaT'] = 0.004
 
-    if 'write_path' in input and input['write_path'] is not None:
-        write_path = input['write_path']
-    else:
+    if 'write_path' not in input:
         write_path = input['base_path'] + "/figures"
-
-    if 'save' in input and input['save'] is None:
-        save = True
     else:
+        write_path = input['write_path']
+
+    if 'save' not in input:
         save = False
+    else:
+        save = input['save']
 
     if not os.path.exists(write_path):
         os.makedirs(write_path)
 
     vTCP = VTcpData(input['hdf5_file'], input['fields'], input['tcp_axis'], input['base_path'], write_path,
+                    input['dns_temperature_name'], input['dns_soot_name'],
                     save)
 
     print(len(vTCP.data[0, :, 0]))
 
     data_3d = ChrestData(input['base_path'] + "/" + input['dns'])
-    vTCP.get_uncertainty_field(data_3d)
-    vTCP.get_optical_thickness(data_3d)
+    # vTCP.get_uncertainty_field(data_3d)
+    # vTCP.get_optical_thickness(data_3d)
 
     vTCP.plot_line_of_sight(50, data_3d)
 
