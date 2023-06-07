@@ -389,26 +389,42 @@ class VTcpData:
         x = data_3d.get_coordinates()
 
         dns_temperature, _, _ = data_3d.get_field(self.dns_temperature_name)
-        if (self.dns_soot is None):
+        if self.dns_soot is None:
             self.get_dns_soot(data_3d)
 
+        if self.tcp_temperature is None:
+            self.get_tcp_temperature()
+
+        if self.tcp_soot is None:
+            self.get_tcp_soot()
+
         # Plot temperature along the line of sight
-        ax[0].scatter(x[:, :, :, 2], dns_temperature[n, :, :, :], color='r', label='Temperature')
+        ax[0].scatter(x[:, :, :, 2], dns_temperature[n, :, :, :], color='k', marker='.', label='Temperature')
+        ax[0].axhline(y=self.tcp_temperature.mean(), color='r', linestyle='-', label='Mean TCP Temperature')
+        [ax[0].axhline(y=i, color='b', linestyle='-', label='Standard Deviation TCP Temperature') for i in
+         [self.tcp_temperature.mean() + np.std(self.tcp_temperature),
+          self.tcp_temperature.mean() - np.std(self.tcp_temperature)]]
         ax[0].set_title("Temperature along the line of sight")
         ax[0].set_ylabel("Temperature [K]")
         ax[0].legend()
+        ax[0].set_ylim(0, dns_temperature[n, :, :, :].max() * 1.1)
 
         # Plot soot volume fraction along the line of sight
-        ax[1].scatter(x[:, :, :, 2], self.dns_soot[n, :, :, :], color='b', label='Soot Volume Fraction')
+        ax[1].scatter(x[:, :, :, 2], self.dns_soot[n, :, :, :], color='k', marker='.', label='Soot Volume Fraction')
+        ax[1].axhline(y=self.tcp_soot.mean(), color='r', linestyle='-', label='Mean TCP Soot')
+        [ax[1].axhline(y=i, color='b', linestyle='-', label='Standard Deviation TCP Soot') for i in
+         [self.tcp_soot.mean() + np.mean(abs(self.tcp_soot - self.tcp_soot.mean()) ** 2),
+          self.tcp_soot.mean() - np.mean(abs(self.tcp_soot - self.tcp_soot.mean()) ** 2)]]
         ax[1].set_title("Soot volume fraction along the line of sight")
         ax[1].set_ylabel("Soot Volume Fraction")
         ax[1].legend()
+        ax[1].set_ylim(0, self.dns_soot[n, :, :, :].max() * 1.1)
 
         # Calculate the absorption for each cell in the line of sight
         kappa = (3.72 * self.dns_soot[n, :, :, :] * self.C_0 * dns_temperature[n, :, :, :]) / self.C_2
 
         # Plot absorption coefficient along the line of sight
-        ax[2].scatter(x[:, :, :, 2], kappa, color='g', label='Absorption Coefficient')
+        ax[2].scatter(x[:, :, :, 2], kappa, color='k', marker='.', label='Absorption Coefficient')
         ax[2].set_title("Absorption coefficient along the line of sight")
         ax[2].set_xlabel("Position along the line of sight")
         ax[2].set_ylabel("Absorption Coefficient")
