@@ -119,13 +119,16 @@ class VTcpData:
             self.get_dns_soot(dns_data)
         kappa = (3.72 * self.dns_soot * self.C_0 * dns_temperature) / self.C_2  # Soot mean absorption
         # Then sum the absorption through all cells in the ray line
-        dns_sum_soot = kappa.sum(axis=(self.tcp_axis + 1), keepdims=True)
-        self.dns_optical_thickness = dns_sum_soot * (
-                self.end_point[self.tcp_axis] - self.start_point[self.tcp_axis])
+        dns_sum_soot = kappa.sum(axis=(1 + self.tcp_axis), keepdims=True)
+        self.dns_optical_thickness = dns_sum_soot * dns_data.delta[
+            2 - self.tcp_axis]
+
+    # / (
+    # self.end_point[2 - self.tcp_axis] - self.start_point[2 - self.tcp_axis])
 
     def get_tcp_soot(self):
         lambda_r = 650.e-9
-        path_length = self.end_point[self.tcp_axis] - self.start_point[self.tcp_axis]
+        path_length = self.end_point[2 - self.tcp_axis] - self.start_point[2 - self.tcp_axis]
         self.tcp_soot = np.zeros_like(self.tcp_temperature)
         threshold_condition = (self.tcp_temperature > 400.0)
         self.tcp_soot = np.where(
@@ -401,45 +404,46 @@ class VTcpData:
         if self.dns_optical_thickness is None:
             self.get_optical_thickness(data_3d)
 
-        # Plot temperature along the line of sight
-        ax[0].scatter(x[:, :, :, 2], dns_temperature[n, :, :, :], color='k', marker='.', label='Temperature')
-        ax[0].axhline(y=self.tcp_temperature.mean(), color='r', linestyle='-', label='Mean TCP Temperature')
-        [ax[0].axhline(y=i, color='b', linestyle='-', label=('Standard Deviation TCP Temperature' if i == 0 else None))
-         for i in [self.tcp_temperature.mean() + np.std(self.tcp_temperature),
-                   self.tcp_temperature.mean() - np.std(self.tcp_temperature)]]
-        ax[0].set_title("Temperature along the line of sight")
-        ax[0].set_ylabel("Temperature [K]")
-        ax[0].legend()
-        ax[0].set_ylim(0, dns_temperature[n, :, :, :].max() * 1.1)
+        # Define data for each subplot
+        plots_data = [
+            {
+                'y': dns_temperature[n, :, :, :],
+                'projected_y': self.tcp_temperature,
+                'ylabel': "Temperature [K]",
+                'label': 'TCP Temperature',
+            },
+            {
+                'y': self.dns_soot[n, :, :, :],
+                'projected_y': self.tcp_soot,
+                'ylabel': "Soot Volume Fraction",
+                'label': 'TCP Soot Volume Fraction',
+            },
+            {
+                'y': (3.72 * self.dns_soot[n, :, :, :] * self.C_0 * dns_temperature[n, :, :, :]) / self.C_2,
+                'projected_y': self.dns_optical_thickness[n, :, :, :] / (
+                        self.end_point[2 - self.tcp_axis] - self.start_point[2 - self.tcp_axis]),
+                'ylabel': "Absorption Coefficient",
+                'label': 'DNS Absorption Coefficient | Mean Optical Thickness: ' + str(
+                    self.dns_optical_thickness.mean()),
+            }
+        ]
 
-        # Plot soot volume fraction along the line of sight
-        ax[1].scatter(x[:, :, :, 2], self.dns_soot[n, :, :, :], color='k', marker='.', label='Soot Volume Fraction')
-        ax[1].axhline(y=self.tcp_soot.mean(), color='r', linestyle='-', label='Mean TCP Soot')
-        [ax[1].axhline(y=i, color='b', linestyle='-', label=('Standard Deviation TCP Soot' if i == 0 else None)) for i
-         in
-         [self.tcp_soot.mean() + np.std(self.tcp_soot),
-          self.tcp_soot.mean() - np.std(self.tcp_soot)]]
-        ax[1].set_title("Soot volume fraction along the line of sight")
-        ax[1].set_ylabel("Soot Volume Fraction")
-        ax[1].legend()
-        ax[1].set_ylim(0, self.dns_soot[n, :, :, :].max() * 1.1)
+        # Iterate over data and axes to plot each subplot
+        for i, data in enumerate(plots_data):
+            ax[i].scatter(x[:, :, :, 2], data['y'], color='k', marker='.', label=data['label'])
+            # [ax[i].axhline(y=j, color='b', linestyle='-',
+            #                label=('Standard Deviation ' + data['label'] if j == 0 else None)) for j
+            #  in [data['projected_y'].mean() + np.std(data['projected_y']),
+            #      data['projected_y'].mean() - np.std(data['projected_y'])]]
+            ax[i].axhline(y=data['projected_y'].mean(), color='r', linestyle='-',
+                          label='Mean ' + data['label'])
+            ax[i].set_title(data['label'] + " along the line of sight")
+            ax[i].set_ylabel(data['ylabel'])
+            ax[i].legend()
+            ax[i].set_ylim(bottom=0)
 
-        # Calculate the absorption for each cell in the line of sight
-        kappa = (3.72 * self.dns_soot[n, :, :, :] * self.C_0 * dns_temperature[n, :, :, :]) / self.C_2
-
-        # Plot absorption coefficient along the line of sight
-        ax[2].scatter(x[:, :, :, 2], kappa, color='k', marker='.', label='Absorption Coefficient')
-        ax[2].set_title("Absorption coefficient along the line of sight")
+        # Set x-label for the last plot
         ax[2].set_xlabel("Position along the line of sight")
-        ax[2].set_ylabel("Absorption Coefficient")
-        ax[2].axhline(y=self.dns_optical_thickness.mean(), color='r', linestyle='-', label='Mean DNS Optical Thickness')
-        [ax[2].axhline(y=i, color='b', linestyle='-',
-                       label=('Standard Deviation Optical Thickness' if i == 0 else None)) for i
-         in
-         [self.dns_optical_thickness.mean() + np.std(self.dns_optical_thickness),
-          self.dns_optical_thickness.mean() - np.std(self.dns_optical_thickness)]]
-        ax[2].legend()
-        ax[2].set_ylim(0, kappa.max() * 1.1)
 
         plt.tight_layout()
         if self.save:
@@ -487,7 +491,9 @@ if __name__ == "__main__":
     data_3d = ChrestData(input['base_path'] + "/" + input['dns'])
     # vTCP.get_uncertainty_field(data_3d)
     # vTCP.get_optical_thickness(data_3d)
-
-    vTCP.plot_line_of_sight(50, data_3d)
+    #
+    # vTCP.plot_uncertainty_field(1)
+    # vTCP.plot_optical_thickness(1)
+    vTCP.plot_line_of_sight(1, data_3d)
 
     print('Done')
