@@ -12,3 +12,6 @@ base_path: '/home/owen/ablateInputs/vtcp_verification/_slab.3D_2023-06-07T16-39-
 dns_temperature_name: "temperature"
 dns_soot_name: "densityYi"
 save: True
+
+#start: 5  # A range of time steps can be selected from the existing files.
+#end: 10

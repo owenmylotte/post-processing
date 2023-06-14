@@ -141,27 +141,41 @@ class VTcpData:
 
     def get_tcp_soot(self):
         lambda_r = 650.e-9
-        path_length = self.end_point[2 - self.tcp_axis] - self.start_point[2 - self.tcp_axis]
-        self.tcp_soot = np.zeros_like(self.front_tcp_temperature)
-        threshold_condition = (self.front_tcp_temperature > 400.0)
-        self.tcp_soot = np.where(
-            threshold_condition,
-            (-lambda_r * 1.e9 / (self.C_0 * path_length)) * np.log(
-                1 - (self.front_data[0, :, :, :, :] * (lambda_r ** 5) * np.exp(
-                    self.C_2 / (lambda_r * self.front_tcp_temperature))) / self.C_1),
-            self.tcp_soot
-        )
+        path_length = self.end_point[2 - self.tcp_axis] - self.start_point[
+            2 - self.tcp_axis]  # TODO: Make sure that the axis selection works correctly.
+
+        for data_type in ['front', 'top']:
+            tcp_temperature = getattr(self, f"{data_type}_tcp_temperature")
+            data = getattr(self, f"{data_type}_data")
+            tcp_soot = np.zeros_like(tcp_temperature)
+
+            threshold_condition = (tcp_temperature > 400.0)
+            tcp_soot = np.where(
+                threshold_condition,
+                (-lambda_r * 1.e9 / (self.C_0 * path_length)) * np.log(
+                    1 - (data[0, :, :, :, :] * (lambda_r ** 5) * np.exp(
+                        self.C_2 / (lambda_r * tcp_temperature))) / self.C_1),
+                tcp_soot
+            )
+
+            # Assign the computed soot values to the corresponding class variable
+            setattr(self, f"{data_type}_tcp_soot", tcp_soot)
 
     def get_dns_soot(self, dns_data):
         dns_density_yi, _, _ = dns_data.get_field(self.dns_soot_name)
         self.dns_soot = dns_density_yi / self.rhoC
 
-    def plot_temperature_step(self, n, name):
+    def plot_temperature_step(self, n, name, data_type='front'):
+        # Check if the data_type argument is valid
+        if data_type not in ['front', 'top']:
+            raise ValueError("data_type must be either 'front' or 'top'.")
+
         # Get the tcp_temperature if it hasn't been computed already
-        if self.front_tcp_temperature is None:
+        tcp_temperature = getattr(self, f"{data_type}_tcp_temperature")
+        if tcp_temperature is None:
             self.get_tcp_temperature()  # Calculate the TCP temperature of the given boundary intensities
 
-        tcp_temperature_frame = self.front_tcp_temperature[n, :, :, :]
+        tcp_temperature_frame = tcp_temperature[n, :, :, :]
 
         fig, ax = plt.subplots()
         ax.set_aspect('equal')
@@ -173,17 +187,13 @@ class VTcpData:
                        vmax=4500, vmin=300)
         fig.colorbar(im, shrink=0.5, pad=0.05)
         # ax.clabel(CS, inline=True, fontsize=10)
-        # ax.set_title('CHREST Format vTCP (n = ' + str(n) + ')')
+        # ax.set_title(f'CHREST Format vTCP ({data_type}) - n = {n}')
         ax.set_xlabel("x [m]")
         ax.set_ylabel("y [m]")
         ax.legend(r"Temperature $[K]$")  # Add label for the temperature
         # if self.save:
         # plt.savefig(str(name) + "." + str(n).zfill(3) + ".png", dpi=1000, bbox_inchees='tight')
         plt.show()
-
-        # tcp_temperature_filtered = tcp_temperature[tcp_temperature < 3500]
-        # tcp_temperature_filtered = tcp_temperature_filtered[300 < tcp_temperature_filtered]
-        # print(np.mean(tcp_temperature_filtered))
 
     def set_limits(self):
         if 'end' in input:
@@ -195,91 +205,115 @@ class VTcpData:
         else:
             self.start = 0  # Set the start time step to the first by default
 
-    def rgb_transform(self, delta_t):
-        self.prf = np.loadtxt("PRF_Color.csv", delimiter=',', skiprows=0)
+# def rgb_transform(self, delta_t):
+#     self.prf = np.loadtxt("PRF_Color.csv", delimiter=',', skiprows=0)
+#
+#     # Get the correct exposure for the camera by getting the maximum intensity for each channel and shifting to 255
+#     exposure_fraction = 1.0
+#     brightness_max = np.array([-100.0, -100.0, -100.0])
+#     for fieldIndex in range(self.field_size):
+#         for timeStep in range(np.shape(self.front_data)[1]):
+#             for pointIndex in range(np.shape(self.front_data)[2]):
+#                 brightness_transformed = np.log(np.pi * self.front_data[fieldIndex, timeStep, pointIndex] * delta_t)
+#                 if brightness_transformed > brightness_max[fieldIndex]:
+#                     brightness_max[fieldIndex] = brightness_transformed
+#     for fieldIndex in range(self.field_size):
+#         prf_row_max = int(255.0 * exposure_fraction)
+#         shift_constant = self.prf[prf_row_max, fieldIndex] - brightness_max[fieldIndex]
+#
+#     for fieldIndex in range(self.field_size):
+#         for timeStep in range(np.shape(self.front_data)[1]):
+#             for pointIndex in range(np.shape(self.front_data)[2]):
+#                 brightness = 0
+#                 brightness_transformed = np.log(np.pi * self.front_data[fieldIndex, timeStep, pointIndex] * delta_t)
+#                 brightness_transformed += shift_constant
+#
+#                 if np.isinf(brightness_transformed):
+#                     brightness_transformed = 0
+#                 for brightnessIndex in range(np.shape(self.prf)[0]):
+#                     if self.prf[brightnessIndex, fieldIndex] > brightness_transformed:
+#                         brightness = brightnessIndex / 255
+#                         break
+#                 self.rgb[timeStep, pointIndex, fieldIndex] = brightness  # pixel brightness based on camera prf
 
-        # Get the correct exposure for the camera by getting the maximum intensity for each channel and shifting to 255
-        exposure_fraction = 1.0
-        brightness_max = np.array([-100.0, -100.0, -100.0])
-        for fieldIndex in range(self.field_size):
-            for timeStep in range(np.shape(self.front_data)[1]):
-                for pointIndex in range(np.shape(self.front_data)[2]):
-                    brightness_transformed = np.log(np.pi * self.front_data[fieldIndex, timeStep, pointIndex] * delta_t)
-                    if brightness_transformed > brightness_max[fieldIndex]:
-                        brightness_max[fieldIndex] = brightness_transformed
-        for fieldIndex in range(self.field_size):
-            prf_row_max = int(255.0 * exposure_fraction)
-            shift_constant = self.prf[prf_row_max, fieldIndex] - brightness_max[fieldIndex]
-
-        for fieldIndex in range(self.field_size):
-            for timeStep in range(np.shape(self.front_data)[1]):
-                for pointIndex in range(np.shape(self.front_data)[2]):
-                    brightness = 0
-                    brightness_transformed = np.log(np.pi * self.front_data[fieldIndex, timeStep, pointIndex] * delta_t)
-                    brightness_transformed += shift_constant
-
-                    if np.isinf(brightness_transformed):
-                        brightness_transformed = 0
-                    for brightnessIndex in range(np.shape(self.prf)[0]):
-                        if self.prf[brightnessIndex, fieldIndex] > brightness_transformed:
-                            brightness = brightnessIndex / 255
-                            break
-                    self.rgb[timeStep, pointIndex, fieldIndex] = brightness  # pixel brightness based on camera prf
-
-    def plot_rgb_step(self, n, name):
-        rframe = np.vstack(
-            (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 0]))
-        rframe = np.transpose(rframe)
-        r = pd.DataFrame(rframe, columns=['x', 'y', 'r'])
-        R = r.pivot_table(index='x', columns='y', values=['r']).T.values
-
-        gframe = np.vstack(
-            (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 1]))
-        gframe = np.transpose(gframe)
-        g = pd.DataFrame(gframe, columns=['x', 'y', 'g'])
-        G = g.pivot_table(index='x', columns='y', values=['g']).T.values
-
-        bframe = np.vstack(
-            (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 2]))
-        bframe = np.transpose(bframe)
-        b = pd.DataFrame(bframe, columns=['x', 'y', 'b'])
-        B = b.pivot_table(index='x', columns='y', values=['b']).T.values
-
-        X_unique = np.sort(r.x.unique())
-        Y_unique = np.sort(r.y.unique())
-        X, Y = np.meshgrid(X_unique, Y_unique)
-        fig, ax = plt.subplots()
-        ax.set_aspect('equal')
-        CS = ax.imshow(np.rot90(np.array([R.data, G.data, B.data]).T, axes=(0, 1)), interpolation='lanczos',
-                       extent=[rframe[:, 0].min(), rframe[:, 0].max(), rframe[:, 1].min(), rframe[:, 1].max()],
-                       vmax=abs(R).max(), vmin=-abs(R).max())
-        ax.set_xlabel("x [m]")
-        ax.set_ylabel("y [m]")
-        if self.save:
-            plt.savefig(self.write_path + "/" + (name) + "." + str(n).zfill(3) + ".png", dpi=1000, bbox_inches='tight')
-        plt.show()
+# def plot_rgb_step(self, n, name):
+#     rframe = np.vstack(
+#         (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 0]))
+#     rframe = np.transpose(rframe)
+#     r = pd.DataFrame(rframe, columns=['x', 'y', 'r'])
+#     R = r.pivot_table(index='x', columns='y', values=['r']).T.values
+#
+#     gframe = np.vstack(
+#         (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 1]))
+#     gframe = np.transpose(gframe)
+#     g = pd.DataFrame(gframe, columns=['x', 'y', 'g'])
+#     G = g.pivot_table(index='x', columns='y', values=['g']).T.values
+#
+#     bframe = np.vstack(
+#         (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 2]))
+#     bframe = np.transpose(bframe)
+#     b = pd.DataFrame(bframe, columns=['x', 'y', 'b'])
+#     B = b.pivot_table(index='x', columns='y', values=['b']).T.values
+#
+#     X_unique = np.sort(r.x.unique())
+#     Y_unique = np.sort(r.y.unique())
+#     X, Y = np.meshgrid(X_unique, Y_unique)
+#     fig, ax = plt.subplots()
+#     ax.set_aspect('equal')
+#     CS = ax.imshow(np.rot90(np.array([R.data, G.data, B.data]).T, axes=(0, 1)), interpolation='lanczos',
+#                    extent=[rframe[:, 0].min(), rframe[:, 0].max(), rframe[:, 1].min(), rframe[:, 1].max()],
+#                    vmax=abs(R).max(), vmin=-abs(R).max())
+#     ax.set_xlabel("x [m]")
+#     ax.set_ylabel("y [m]")
+#     if self.save:
+#         plt.savefig(self.write_path + "/" + (name) + "." + str(n).zfill(3) + ".png", dpi=1000, bbox_inches='tight')
+#     plt.show()
 
     def get_uncertainty_field(self, dns_data):
-        if self.front_tcp_temperature is None:
-            self.get_tcp_temperature()  # Calculate the TCP temperature of the given boundary intensities
-        if self.tcp_soot is None:
-            self.get_tcp_soot()  # Calculate the TCP temperature of the given boundary intensities
+        for orientation in ['front', 'top']:
+            tcp_temperature = getattr(self, f"{orientation}_tcp_temperature", None)
+            tcp_soot = getattr(self, f"{orientation}_tcp_soot", None)
 
-        # Now that we have the tcp temperature, we want to get the maximum temperatures in each of the ray lines.x
-        dns_temperature, _, _ = dns_data.get_field(self.dns_temperature_name)
-        dns_soot, _, _ = dns_data.get_field(self.dns_soot_name)
-        self.dns_maximum_temperature = dns_temperature.max(axis=(self.tcp_axis + 1), keepdims=True)
-        self.dns_maximum_soot = dns_soot.max(axis=(self.tcp_axis + 1), keepdims=True)
-        self.front_temperature_error = np.abs(self.dns_maximum_temperature - self.front_tcp_temperature)
-        self.soot_error = np.abs(self.dns_maximum_soot - self.tcp_soot)
+            # Calculate the TCP temperature and soot of the given boundary intensities
+            if tcp_temperature is None:
+                self.get_tcp_temperature()
+            if tcp_soot is None:
+                self.get_tcp_soot()
 
-    def plot_optical_thickness(self, n):
+            # Get the appropriate attribute names
+            dns_maximum_temperature_attr = f"{orientation}_dns_maximum_temperature"
+            dns_maximum_soot_attr = f"{orientation}_dns_maximum_soot"
+            temperature_error_attr = f"{orientation}_temperature_error"
+            soot_error_attr = f"{orientation}_soot_error"
 
-        optical_thickness_frame = self.front_dns_optical_thickness[n, :, :, :]
+            # Fetch the DNS data
+            dns_temperature, _, _ = dns_data.get_field(self.dns_temperature_name)
+            dns_soot, _, _ = dns_data.get_field(self.dns_soot_name)
+
+            # Compute maximum values along the ray lines
+            dns_maximum_temperature = dns_temperature.max(axis=(self.tcp_axis + 1), keepdims=True)
+            dns_maximum_soot = dns_soot.max(axis=(self.tcp_axis + 1), keepdims=True)
+
+            # Compute error values
+            temperature_error = np.abs(dns_maximum_temperature - tcp_temperature)
+            soot_error = np.abs(dns_maximum_soot - tcp_soot)
+
+            # Assign the computed values to the appropriate attributes
+            setattr(self, dns_maximum_temperature_attr, dns_maximum_temperature)
+            setattr(self, dns_maximum_soot_attr, dns_maximum_soot)
+            setattr(self, temperature_error_attr, temperature_error)
+            setattr(self, soot_error_attr, soot_error)
+
+    def plot_optical_thickness(self, n, orientation='front'):
+        if orientation not in ['front', 'top']:
+            raise ValueError("Orientation must be 'front' or 'top'")
+
+        optical_thickness = getattr(self, f"{orientation}_dns_optical_thickness")
+        optical_thickness_frame = optical_thickness[n, :, :, :]
 
         fig, ax = plt.subplots()
         ax.set_aspect('equal')
-        # plot the temperature as a slice in the z direction
+        # plot the optical thickness as a slice in the z direction
         im = ax.imshow(optical_thickness_frame[0, :, :],
                        interpolation='none', cmap="inferno",
                        origin='lower', extent=[self.start_point[0], self.end_point[0],
@@ -290,28 +324,38 @@ class VTcpData:
         ax.set_ylabel("y [m]")
         plt.tight_layout()
         if self.save:
-            plt.savefig(self.write_path + "/" + "opticalThickness" + "." + str(n).zfill(3) + ".png", dpi=1000,
-                        bbox_inchees='tight')
+            plt.savefig(self.write_path + "/opticalThickness_" + orientation + "." + str(n).zfill(3) + ".png", dpi=1000,
+                        bbox_inches='tight')
         plt.show()
 
-    def plot_uncertainty_field(self, n):
+    def plot_uncertainty_field(self, n, orientation='front'):
+        if orientation not in ['front', 'top']:
+            raise ValueError("Orientation must be 'front' or 'top'")
+
+        # Get the appropriate data based on the orientation
+        tcp_temperature = getattr(self, f"{orientation}_tcp_temperature")
+        dns_maximum_temperature = getattr(self, f"{orientation}_dns_maximum_temperature")
+        temperature_error = getattr(self, f"{orientation}_temperature_error")
+        tcp_soot = getattr(self, f"{orientation}_tcp_soot")
+        dns_maximum_soot = getattr(self, f"{orientation}_dns_maximum_soot")
+        soot_error = getattr(self, f"{orientation}_soot_error")
+
+        tcp_temperature_frame = tcp_temperature[n, :, :, :]
+        dns_temperature_frame = dns_maximum_temperature[n, :, :, :]
+        temperature_error_frame = temperature_error[n, :, :, :]
+
+        tcp_soot_frame = tcp_soot[n, :, :, :]
+        dns_soot_frame = dns_maximum_soot[n, :, :, :]
+        soot_error_frame = soot_error[n, :, :, :]
+
         fig = plt.figure(figsize=(16, 7))
         gs = gridspec.GridSpec(3, 4, width_ratios=[20, 1, 20, 1], height_ratios=[1, 1, 1])
-
-        tcp_temperature_frame = self.front_tcp_temperature[n, :, :, :]
-        dns_temperature_frame = self.dns_maximum_temperature[n, :, :, :]
-        temperature_error_frame = self.front_temperature_error[n, :, :, :]
-
-        tcp_soot_frame = self.tcp_soot[n, :, :, :]
-        dns_soot_frame = self.dns_maximum_soot[n, :, :, :]
-        soot_error_frame = self.soot_error[n, :, :, :]
 
         # Plot dns_temperature
         ax1 = fig.add_subplot(gs[0, 0])
         im1 = ax1.imshow(dns_temperature_frame[0, :, :], interpolation='none', cmap="inferno",
                          origin='lower',
-                         extent=[self.start_point[0], self.end_point[0],
-                                 self.start_point[1], self.end_point[1]],
+                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
                          vmax=4500, vmin=300)
         ax1.set_title("DNS Temperature")
         ax1.set_ylabel("y [m]")
@@ -320,19 +364,17 @@ class VTcpData:
         ax2 = fig.add_subplot(gs[1, 0])
         im2 = ax2.imshow(tcp_temperature_frame[0, :, :],
                          interpolation='none', cmap="inferno",
-                         origin='lower', extent=[self.start_point[0], self.end_point[0],
-                                                 self.start_point[1], self.end_point[1]],
+                         origin='lower',
+                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
                          vmax=4500, vmin=300)
         ax2.set_title("TCP Temperature")
         ax2.set_ylabel("y [m]")
 
-        # Plot uncertainty
+        # Plot temperature uncertainty
         ax3 = fig.add_subplot(gs[2, 0])
-
         im3 = ax3.imshow(temperature_error_frame[0, :, :], interpolation='none', cmap="inferno",
                          origin='lower',
-                         extent=[self.start_point[0], self.end_point[0],
-                                 self.start_point[1], self.end_point[1]],
+                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
                          vmax=1000, vmin=0)
         ax3.set_title("Temperature Error Field")
         ax3.set_xlabel("x [m]")
@@ -353,8 +395,7 @@ class VTcpData:
         ax4 = fig.add_subplot(gs[0, 2])
         im4 = ax4.imshow(dns_soot_frame[0, :, :], interpolation='none', cmap="inferno",
                          origin='lower',
-                         extent=[self.start_point[0], self.end_point[0],
-                                 self.start_point[1], self.end_point[1]],
+                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
                          vmax=tcp_soot_frame.max(), vmin=tcp_soot_frame.min())
         ax4.set_title("DNS Soot")
         ax4.set_ylabel("y [m]")
@@ -363,19 +404,17 @@ class VTcpData:
         ax5 = fig.add_subplot(gs[1, 2])
         im5 = ax5.imshow(tcp_soot_frame[0, :, :],
                          interpolation='none', cmap="inferno",
-                         origin='lower', extent=[self.start_point[0], self.end_point[0],
-                                                 self.start_point[1], self.end_point[1]],
+                         origin='lower',
+                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
                          vmax=tcp_soot_frame.max(), vmin=tcp_soot_frame.min())
         ax5.set_title("TCP Soot")
         ax5.set_ylabel("y [m]")
 
-        # Plot uncertainty
+        # Plot soot uncertainty
         ax6 = fig.add_subplot(gs[2, 2])
-
         im6 = ax6.imshow(soot_error_frame[0, :, :], interpolation='none', cmap="inferno",
                          origin='lower',
-                         extent=[self.start_point[0], self.end_point[0],
-                                 self.start_point[1], self.end_point[1]],
+                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
                          vmax=soot_error_frame.max(), vmin=soot_error_frame.min())
         ax6.set_title("Soot Error Field")
         ax6.set_xlabel("x [m]")
@@ -394,7 +433,7 @@ class VTcpData:
 
         plt.tight_layout()
         if self.save:
-            plt.savefig(self.write_path + "/" + "uncertaintyField" + "." + str(n).zfill(3) + ".png", dpi=1000,
+            plt.savefig(self.write_path + "/uncertaintyField_" + orientation + "." + str(n).zfill(3) + ".png", dpi=1000,
                         bbox_inches='tight')
         plt.show()
 
@@ -472,7 +511,7 @@ if __name__ == "__main__":
                         help='The path to the YAML input file.')
     args = parser.parse_args()
 
-    # Load configuration from YAML file
+    # Load configuration from YAML filex
     with open(args.input_path, 'r') as stream:
         try:
             input = yaml.safe_load(stream)
