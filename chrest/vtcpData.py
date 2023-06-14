@@ -12,7 +12,7 @@ plt.rcParams["font.family"] = "Noto Serif CJK JP"
 
 class VTcpData:
 
-    def __init__(self, files=None, fields=None, tcp_axis=None, base_path=None, write_path=None,
+    def __init__(self, front_files=None, top_files=None, fields=None, tcp_axis=None, base_path=None, write_path=None,
                  dns_temperature_name=None, dns_soot_name=None, save=None):
         h = 6.62607004e-34
         c = 299792458
@@ -26,10 +26,11 @@ class VTcpData:
         self.tcp_soot = None
         self.save = save
         self.soot_error = None
-        self.temperature_error = None
+        self.front_temperature_error = None
 
         self.dns_soot = None
-        self.dns_optical_thickness = None
+        self.front_dns_optical_thickness = None
+        self.top_dns_optical_thickness = None
         self.dns_maximum_temperature = None
         self.dns_maximum_soot = None
         self.dns_temperature_name = dns_temperature_name
@@ -45,26 +46,27 @@ class VTcpData:
         if tcp_axis == "z":
             self.tcp_axis = 2
 
-        # Initialize the
-        vtcp = ChrestData(base_path + "/" + files)
-        self.start_point = vtcp.start_point
-        self.end_point = vtcp.end_point
-        # self.rgb = np.zeros((np.shape(self.data)[0], np.shape(self.data)[1], self.field_size))
+        def load_vtcp_data(vtcp_files, field_size):
+            vtcp = ChrestData(base_path + "/" + vtcp_files)
+            data = np.array([])
+
+            for f in range(field_size):
+                data_tmp, _, _ = vtcp.get_field(fields[f])
+                data = np.vstack((data, np.expand_dims(data_tmp, axis=0))) if f else np.expand_dims(data_tmp, axis=0)
+
+            return data
+
+        self.start_point = ChrestData(base_path + "/" + front_files).start_point
+        self.end_point = ChrestData(base_path + "/" + front_files).end_point
         self.times = np.zeros(self.field_size)
         self.names = np.zeros(self.field_size)
-        self.tcp_temperature = None
-        self.temperature_error = None
-        # coords_tmp = vtcp.compute_cell_centers(3)
-        # self.coords = np.zeros((self.field_size, np.shape(coords_tmp)[0], np.shape(coords_tmp)[1]))
+        self.front_tcp_temperature = None
+        self.front_temperature_error = None
+        self.top_tcp_temperature = None
+        self.top_temperature_error = None
 
-        # Get the data from the vTCP files
-        self.data = np.array([])
-        for f in range(self.field_size):
-            data_tmp, _, _ = vtcp.get_field(fields[f])
-            if f == 0:
-                self.data = np.expand_dims(data_tmp, axis=0)
-            else:
-                self.data = np.vstack((self.data, np.expand_dims(data_tmp, axis=0)))
+        self.front_data = load_vtcp_data(front_files, self.field_size)
+        self.top_data = load_vtcp_data(top_files, self.field_size)
 
         self.set_limits()  # Sets the time step range of the processing
 
@@ -73,9 +75,6 @@ class VTcpData:
         # First, get the intensity ratio between the red and green channels (0 and 1)
         # Then, use the ratio to get the temperature
         # Finally, plot the temperature
-        ratio = self.data[1, :, :, :, :] / self.data[0, :, :, :, :]
-        ratio = np.nan_to_num(ratio)
-
         c = 3.e8  # Speed of light
         h = 6.626e-34  # Planck's constant
         k = 1.3806e-23  # Boltzmann Constant
@@ -86,30 +85,41 @@ class VTcpData:
 
         lambdaR = 650e-9
         lambdaG = 532e-9
-        self.tcp_temperature = np.zeros_like(ratio, dtype=np.dtype(float))
+        threshold_fraction = 0.05  # Threshold for the absolute intensity
 
-        threshold_fraction = 0.05  # Threshold for the absolute intensity (keep at 0.15?)
+        for data_type in ['front', 'top']:
+            if data_type == 'front':
+                data = self.front_data
+            else:
+                data = self.top_data
 
-        for n in range(np.shape(self.data)[1]):
-            for i in range(np.shape(self.data)[2]):
-                for j in range(np.shape(self.data)[3]):
-                    for k in range(np.shape(self.data)[4]):
-                        if self.data[0, n, i, j, k] < threshold_fraction * np.max(self.data[0, n, :, :, :]) \
-                                or self.data[1, n, i, j, k] < threshold_fraction * np.max(self.data[1, n, :, :, :]):
-                            self.tcp_temperature[
-                                n, i, j, k] = 0  # If either channel is zero, set the temperature to zero
-                        if ratio[n, i, j, k] == 0:
-                            self.tcp_temperature[n, i, j, k] = 0
-                        else:
-                            self.tcp_temperature[n, i, j, k] = (c2 * ((1. / lambdaR) - (1. / lambdaG))) / (
-                                    np.log(ratio[n, i, j, k]) + np.log((lambdaG / lambdaR) ** 5))
-                        if self.tcp_temperature[n, i, j, k] < 300:  # or self.tcp_temperature[i] > 3500:
-                            self.tcp_temperature[n, i, j, k] = 300
-        # return self.tcp_temperature
+            ratio = data[1, :, :, :, :] / data[0, :, :, :, :]
+            ratio = np.nan_to_num(ratio)
+            tcp_temperature = np.zeros_like(ratio, dtype=np.dtype(float))
 
-        # Get the size of a single mesh.
-        # Iterate through the time steps
-        # Iterate through each time step and place a point on the plot
+            for n in range(np.shape(data)[1]):
+                for i in range(np.shape(data)[2]):
+                    for j in range(np.shape(data)[3]):
+                        for k in range(np.shape(data)[4]):
+                            if data[0, n, i, j, k] < threshold_fraction * np.max(data[0, n, :, :, :]) \
+                                    or data[1, n, i, j, k] < threshold_fraction * np.max(data[1, n, :, :, :]):
+                                tcp_temperature[n, i, j, k] = 0
+                            elif ratio[n, i, j, k] != 0:
+                                tcp_temperature[n, i, j, k] = (c2 * ((1. / lambdaR) - (1. / lambdaG))) / (
+                                        np.log(ratio[n, i, j, k]) + np.log((lambdaG / lambdaR) ** 5))
+
+                            if tcp_temperature[n, i, j, k] < 300:
+                                tcp_temperature[n, i, j, k] = 300
+
+            # Assign the computed temperatures to the corresponding class variable
+            if data_type == 'front':
+                self.front_tcp_temperature = tcp_temperature
+            else:
+                self.top_tcp_temperature = tcp_temperature
+
+    # Get the size of a single mesh.
+    # Iterate through the time steps
+    # Iterate through each time step and place a point on the plot
 
     def get_optical_thickness(self, dns_data):
         # Calculate the optical thickness of the frame
@@ -119,9 +129,12 @@ class VTcpData:
             self.get_dns_soot(dns_data)
         kappa = (3.72 * self.dns_soot * self.C_0 * dns_temperature) / self.C_2  # Soot mean absorption
         # Then sum the absorption through all cells in the ray line
-        dns_sum_soot = kappa.sum(axis=(1 + self.tcp_axis), keepdims=True)
-        self.dns_optical_thickness = dns_sum_soot * dns_data.delta[
-            2 - self.tcp_axis]
+        axis_values = [1, 2]
+        optical_thickness_attributes = ['front_dns_optical_thickness', 'top_dns_optical_thickness']
+
+        for axis, attribute in zip(axis_values, optical_thickness_attributes):
+            dns_sum_soot = kappa.sum(axis=axis, keepdims=True)
+            setattr(self, attribute, dns_sum_soot * dns_data.delta[2 - self.tcp_axis])
 
     # / (
     # self.end_point[2 - self.tcp_axis] - self.start_point[2 - self.tcp_axis])
@@ -129,13 +142,13 @@ class VTcpData:
     def get_tcp_soot(self):
         lambda_r = 650.e-9
         path_length = self.end_point[2 - self.tcp_axis] - self.start_point[2 - self.tcp_axis]
-        self.tcp_soot = np.zeros_like(self.tcp_temperature)
-        threshold_condition = (self.tcp_temperature > 400.0)
+        self.tcp_soot = np.zeros_like(self.front_tcp_temperature)
+        threshold_condition = (self.front_tcp_temperature > 400.0)
         self.tcp_soot = np.where(
             threshold_condition,
             (-lambda_r * 1.e9 / (self.C_0 * path_length)) * np.log(
-                1 - (self.data[0, :, :, :, :] * (lambda_r ** 5) * np.exp(
-                    self.C_2 / (lambda_r * self.tcp_temperature))) / self.C_1),
+                1 - (self.front_data[0, :, :, :, :] * (lambda_r ** 5) * np.exp(
+                    self.C_2 / (lambda_r * self.front_tcp_temperature))) / self.C_1),
             self.tcp_soot
         )
 
@@ -145,10 +158,10 @@ class VTcpData:
 
     def plot_temperature_step(self, n, name):
         # Get the tcp_temperature if it hasn't been computed already
-        if self.tcp_temperature is None:
+        if self.front_tcp_temperature is None:
             self.get_tcp_temperature()  # Calculate the TCP temperature of the given boundary intensities
 
-        tcp_temperature_frame = self.tcp_temperature[n, :, :, :]
+        tcp_temperature_frame = self.front_tcp_temperature[n, :, :, :]
 
         fig, ax = plt.subplots()
         ax.set_aspect('equal')
@@ -176,7 +189,7 @@ class VTcpData:
         if 'end' in input:
             self.end = input['end']
         else:
-            self.end = len(self.data[:, 0]) - 1  # Set the end time to the last step by default
+            self.end = len(self.front_data[:, 0]) - 1  # Set the end time to the last step by default
         if 'start' in input:
             self.start = input['start']
         else:
@@ -189,9 +202,9 @@ class VTcpData:
         exposure_fraction = 1.0
         brightness_max = np.array([-100.0, -100.0, -100.0])
         for fieldIndex in range(self.field_size):
-            for timeStep in range(np.shape(self.data)[1]):
-                for pointIndex in range(np.shape(self.data)[2]):
-                    brightness_transformed = np.log(np.pi * self.data[fieldIndex, timeStep, pointIndex] * delta_t)
+            for timeStep in range(np.shape(self.front_data)[1]):
+                for pointIndex in range(np.shape(self.front_data)[2]):
+                    brightness_transformed = np.log(np.pi * self.front_data[fieldIndex, timeStep, pointIndex] * delta_t)
                     if brightness_transformed > brightness_max[fieldIndex]:
                         brightness_max[fieldIndex] = brightness_transformed
         for fieldIndex in range(self.field_size):
@@ -199,10 +212,10 @@ class VTcpData:
             shift_constant = self.prf[prf_row_max, fieldIndex] - brightness_max[fieldIndex]
 
         for fieldIndex in range(self.field_size):
-            for timeStep in range(np.shape(self.data)[1]):
-                for pointIndex in range(np.shape(self.data)[2]):
+            for timeStep in range(np.shape(self.front_data)[1]):
+                for pointIndex in range(np.shape(self.front_data)[2]):
                     brightness = 0
-                    brightness_transformed = np.log(np.pi * self.data[fieldIndex, timeStep, pointIndex] * delta_t)
+                    brightness_transformed = np.log(np.pi * self.front_data[fieldIndex, timeStep, pointIndex] * delta_t)
                     brightness_transformed += shift_constant
 
                     if np.isinf(brightness_transformed):
@@ -247,22 +260,22 @@ class VTcpData:
         plt.show()
 
     def get_uncertainty_field(self, dns_data):
-        if self.tcp_temperature is None:
+        if self.front_tcp_temperature is None:
             self.get_tcp_temperature()  # Calculate the TCP temperature of the given boundary intensities
         if self.tcp_soot is None:
             self.get_tcp_soot()  # Calculate the TCP temperature of the given boundary intensities
 
-        # Now that we have the tcp temperature, we want to get the maximum temperatures in each of the ray lines.
+        # Now that we have the tcp temperature, we want to get the maximum temperatures in each of the ray lines.x
         dns_temperature, _, _ = dns_data.get_field(self.dns_temperature_name)
         dns_soot, _, _ = dns_data.get_field(self.dns_soot_name)
         self.dns_maximum_temperature = dns_temperature.max(axis=(self.tcp_axis + 1), keepdims=True)
         self.dns_maximum_soot = dns_soot.max(axis=(self.tcp_axis + 1), keepdims=True)
-        self.temperature_error = np.abs(self.dns_maximum_temperature - self.tcp_temperature)
+        self.front_temperature_error = np.abs(self.dns_maximum_temperature - self.front_tcp_temperature)
         self.soot_error = np.abs(self.dns_maximum_soot - self.tcp_soot)
 
     def plot_optical_thickness(self, n):
 
-        optical_thickness_frame = self.dns_optical_thickness[n, :, :, :]
+        optical_thickness_frame = self.front_dns_optical_thickness[n, :, :, :]
 
         fig, ax = plt.subplots()
         ax.set_aspect('equal')
@@ -285,9 +298,9 @@ class VTcpData:
         fig = plt.figure(figsize=(16, 7))
         gs = gridspec.GridSpec(3, 4, width_ratios=[20, 1, 20, 1], height_ratios=[1, 1, 1])
 
-        tcp_temperature_frame = self.tcp_temperature[n, :, :, :]
+        tcp_temperature_frame = self.front_tcp_temperature[n, :, :, :]
         dns_temperature_frame = self.dns_maximum_temperature[n, :, :, :]
-        temperature_error_frame = self.temperature_error[n, :, :, :]
+        temperature_error_frame = self.front_temperature_error[n, :, :, :]
 
         tcp_soot_frame = self.tcp_soot[n, :, :, :]
         dns_soot_frame = self.dns_maximum_soot[n, :, :, :]
@@ -395,20 +408,20 @@ class VTcpData:
         if self.dns_soot is None:
             self.get_dns_soot(data_3d)
 
-        if self.tcp_temperature is None:
+        if self.front_tcp_temperature is None:
             self.get_tcp_temperature()
 
         if self.tcp_soot is None:
             self.get_tcp_soot()
 
-        if self.dns_optical_thickness is None:
+        if self.front_dns_optical_thickness is None:
             self.get_optical_thickness(data_3d)
 
         # Define data for each subplot
         plots_data = [
             {
                 'y': dns_temperature[n, :, :, :],
-                'projected_y': self.tcp_temperature,
+                'projected_y': self.front_tcp_temperature,
                 'ylabel': "Temperature [K]",
                 'label': 'TCP Temperature',
             },
@@ -420,11 +433,11 @@ class VTcpData:
             },
             {
                 'y': (3.72 * self.dns_soot[n, :, :, :] * self.C_0 * dns_temperature[n, :, :, :]) / self.C_2,
-                'projected_y': self.dns_optical_thickness[n, :, :, :] / (
+                'projected_y': self.front_dns_optical_thickness[n, :, :, :] / (
                         self.end_point[2 - self.tcp_axis] - self.start_point[2 - self.tcp_axis]),
                 'ylabel': "Absorption Coefficient",
                 'label': 'DNS Absorption Coefficient | Mean Optical Thickness: ' + str(
-                    self.dns_optical_thickness.mean()),
+                    self.front_dns_optical_thickness.mean()),
             }
         ]
 
@@ -482,18 +495,19 @@ if __name__ == "__main__":
     if not os.path.exists(write_path):
         os.makedirs(write_path)
 
-    vTCP = VTcpData(input['hdf5_file'], input['fields'], input['tcp_axis'], input['base_path'], write_path,
+    vTCP = VTcpData(input['front_tcp'], input['top_tcp'], input['fields'], input['tcp_axis'], input['base_path'],
+                    write_path,
                     input['dns_temperature_name'], input['dns_soot_name'],
                     save)
 
-    print(len(vTCP.data[0, :, 0]))
+    print(len(vTCP.front_data[0, :, 0]))
 
     data_3d = ChrestData(input['base_path'] + "/" + input['dns'])
-    # vTCP.get_uncertainty_field(data_3d)
-    # vTCP.get_optical_thickness(data_3d)
-    #
-    # vTCP.plot_uncertainty_field(1)
-    # vTCP.plot_optical_thickness(1)
+    vTCP.get_uncertainty_field(data_3d)
+    vTCP.get_optical_thickness(data_3d)
+
+    vTCP.plot_uncertainty_field(1)
+    vTCP.plot_optical_thickness(1)
     vTCP.plot_line_of_sight(1, data_3d)
 
     print('Done')
