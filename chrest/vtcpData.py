@@ -271,6 +271,7 @@ class VTcpData:
 
     def get_uncertainty_field(self, dns_data):
         for orientation in ['front', 'top']:
+
             tcp_temperature = getattr(self, f"{orientation}_tcp_temperature", None)
             tcp_soot = getattr(self, f"{orientation}_tcp_soot", None)
 
@@ -279,6 +280,9 @@ class VTcpData:
                 self.get_tcp_temperature()
             if tcp_soot is None:
                 self.get_tcp_soot()
+
+            tcp_temperature = getattr(self, f"{orientation}_tcp_temperature", None)
+            tcp_soot = getattr(self, f"{orientation}_tcp_soot", None)
 
             # Get the appropriate attribute names
             dns_maximum_temperature_attr = f"{orientation}_dns_maximum_temperature"
@@ -466,7 +470,7 @@ class VTcpData:
             },
             {
                 'y': self.dns_soot[n, :, :, :],
-                'projected_y': self.tcp_soot,
+                'projected_y': self.front_tcp_soot,
                 'ylabel': "Soot Volume Fraction",
                 'label': 'TCP Soot Volume Fraction',
             },
