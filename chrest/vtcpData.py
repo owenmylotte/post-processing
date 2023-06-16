@@ -134,17 +134,22 @@ class VTcpData:
 
         for axis, attribute in zip(axis_values, optical_thickness_attributes):
             dns_sum_soot = kappa.sum(axis=axis, keepdims=True)
-            setattr(self, attribute, dns_sum_soot * dns_data.delta[2 - self.tcp_axis])
+            setattr(self, attribute, dns_sum_soot * dns_data.delta[2 - axis])
 
     # / (
     # self.end_point[2 - self.tcp_axis] - self.start_point[2 - self.tcp_axis])
 
     def get_tcp_soot(self):
         lambda_r = 650.e-9
-        path_length = self.end_point[2 - self.tcp_axis] - self.start_point[
-            2 - self.tcp_axis]  # TODO: Make sure that the axis selection works correctly.
 
         for data_type in ['front', 'top']:
+            axis = 0
+            if data_type == 'front':
+                axis = 0
+            else:
+                axis = 1
+            path_length = self.end_point[2 - axis] - self.start_point[
+                2 - axis]  # TODO: Make sure that the axis selection works correctly.
             tcp_temperature = getattr(self, f"{data_type}_tcp_temperature")
             data = getattr(self, f"{data_type}_data")
             tcp_soot = np.zeros_like(tcp_temperature)
@@ -205,72 +210,78 @@ class VTcpData:
         else:
             self.start = 0  # Set the start time step to the first by default
 
-# def rgb_transform(self, delta_t):
-#     self.prf = np.loadtxt("PRF_Color.csv", delimiter=',', skiprows=0)
-#
-#     # Get the correct exposure for the camera by getting the maximum intensity for each channel and shifting to 255
-#     exposure_fraction = 1.0
-#     brightness_max = np.array([-100.0, -100.0, -100.0])
-#     for fieldIndex in range(self.field_size):
-#         for timeStep in range(np.shape(self.front_data)[1]):
-#             for pointIndex in range(np.shape(self.front_data)[2]):
-#                 brightness_transformed = np.log(np.pi * self.front_data[fieldIndex, timeStep, pointIndex] * delta_t)
-#                 if brightness_transformed > brightness_max[fieldIndex]:
-#                     brightness_max[fieldIndex] = brightness_transformed
-#     for fieldIndex in range(self.field_size):
-#         prf_row_max = int(255.0 * exposure_fraction)
-#         shift_constant = self.prf[prf_row_max, fieldIndex] - brightness_max[fieldIndex]
-#
-#     for fieldIndex in range(self.field_size):
-#         for timeStep in range(np.shape(self.front_data)[1]):
-#             for pointIndex in range(np.shape(self.front_data)[2]):
-#                 brightness = 0
-#                 brightness_transformed = np.log(np.pi * self.front_data[fieldIndex, timeStep, pointIndex] * delta_t)
-#                 brightness_transformed += shift_constant
-#
-#                 if np.isinf(brightness_transformed):
-#                     brightness_transformed = 0
-#                 for brightnessIndex in range(np.shape(self.prf)[0]):
-#                     if self.prf[brightnessIndex, fieldIndex] > brightness_transformed:
-#                         brightness = brightnessIndex / 255
-#                         break
-#                 self.rgb[timeStep, pointIndex, fieldIndex] = brightness  # pixel brightness based on camera prf
+    # def rgb_transform(self, delta_t):
+    #     self.prf = np.loadtxt("PRF_Color.csv", delimiter=',', skiprows=0)
+    #
+    #     # Get the correct exposure for the camera by getting the maximum intensity for each channel and shifting to 255
+    #     exposure_fraction = 1.0
+    #     brightness_max = np.array([-100.0, -100.0, -100.0])
+    #     for fieldIndex in range(self.field_size):
+    #         for timeStep in range(np.shape(self.front_data)[1]):
+    #             for pointIndex in range(np.shape(self.front_data)[2]):
+    #                 brightness_transformed = np.log(np.pi * self.front_data[fieldIndex, timeStep, pointIndex] * delta_t)
+    #                 if brightness_transformed > brightness_max[fieldIndex]:
+    #                     brightness_max[fieldIndex] = brightness_transformed
+    #     for fieldIndex in range(self.field_size):
+    #         prf_row_max = int(255.0 * exposure_fraction)
+    #         shift_constant = self.prf[prf_row_max, fieldIndex] - brightness_max[fieldIndex]
+    #
+    #     for fieldIndex in range(self.field_size):
+    #         for timeStep in range(np.shape(self.front_data)[1]):
+    #             for pointIndex in range(np.shape(self.front_data)[2]):
+    #                 brightness = 0
+    #                 brightness_transformed = np.log(np.pi * self.front_data[fieldIndex, timeStep, pointIndex] * delta_t)
+    #                 brightness_transformed += shift_constant
+    #
+    #                 if np.isinf(brightness_transformed):
+    #                     brightness_transformed = 0
+    #                 for brightnessIndex in range(np.shape(self.prf)[0]):
+    #                     if self.prf[brightnessIndex, fieldIndex] > brightness_transformed:
+    #                         brightness = brightnessIndex / 255
+    #                         break
+    #                 self.rgb[timeStep, pointIndex, fieldIndex] = brightness  # pixel brightness based on camera prf
 
-# def plot_rgb_step(self, n, name):
-#     rframe = np.vstack(
-#         (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 0]))
-#     rframe = np.transpose(rframe)
-#     r = pd.DataFrame(rframe, columns=['x', 'y', 'r'])
-#     R = r.pivot_table(index='x', columns='y', values=['r']).T.values
-#
-#     gframe = np.vstack(
-#         (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 1]))
-#     gframe = np.transpose(gframe)
-#     g = pd.DataFrame(gframe, columns=['x', 'y', 'g'])
-#     G = g.pivot_table(index='x', columns='y', values=['g']).T.values
-#
-#     bframe = np.vstack(
-#         (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 2]))
-#     bframe = np.transpose(bframe)
-#     b = pd.DataFrame(bframe, columns=['x', 'y', 'b'])
-#     B = b.pivot_table(index='x', columns='y', values=['b']).T.values
-#
-#     X_unique = np.sort(r.x.unique())
-#     Y_unique = np.sort(r.y.unique())
-#     X, Y = np.meshgrid(X_unique, Y_unique)
-#     fig, ax = plt.subplots()
-#     ax.set_aspect('equal')
-#     CS = ax.imshow(np.rot90(np.array([R.data, G.data, B.data]).T, axes=(0, 1)), interpolation='lanczos',
-#                    extent=[rframe[:, 0].min(), rframe[:, 0].max(), rframe[:, 1].min(), rframe[:, 1].max()],
-#                    vmax=abs(R).max(), vmin=-abs(R).max())
-#     ax.set_xlabel("x [m]")
-#     ax.set_ylabel("y [m]")
-#     if self.save:
-#         plt.savefig(self.write_path + "/" + (name) + "." + str(n).zfill(3) + ".png", dpi=1000, bbox_inches='tight')
-#     plt.show()
+    # def plot_rgb_step(self, n, name):
+    #     rframe = np.vstack(
+    #         (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 0]))
+    #     rframe = np.transpose(rframe)
+    #     r = pd.DataFrame(rframe, columns=['x', 'y', 'r'])
+    #     R = r.pivot_table(index='x', columns='y', values=['r']).T.values
+    #
+    #     gframe = np.vstack(
+    #         (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 1]))
+    #     gframe = np.transpose(gframe)
+    #     g = pd.DataFrame(gframe, columns=['x', 'y', 'g'])
+    #     G = g.pivot_table(index='x', columns='y', values=['g']).T.values
+    #
+    #     bframe = np.vstack(
+    #         (self.coords[0, :, 0], self.coords[0, :, 1], self.rgb[n, :, 2]))
+    #     bframe = np.transpose(bframe)
+    #     b = pd.DataFrame(bframe, columns=['x', 'y', 'b'])
+    #     B = b.pivot_table(index='x', columns='y', values=['b']).T.values
+    #
+    #     X_unique = np.sort(r.x.unique())
+    #     Y_unique = np.sort(r.y.unique())
+    #     X, Y = np.meshgrid(X_unique, Y_unique)
+    #     fig, ax = plt.subplots()
+    #     ax.set_aspect('equal')
+    #     CS = ax.imshow(np.rot90(np.array([R.data, G.data, B.data]).T, axes=(0, 1)), interpolation='lanczos',
+    #                    extent=[rframe[:, 0].min(), rframe[:, 0].max(), rframe[:, 1].min(), rframe[:, 1].max()],
+    #                    vmax=abs(R).max(), vmin=-abs(R).max())
+    #     ax.set_xlabel("x [m]")
+    #     ax.set_ylabel("y [m]")
+    #     if self.save:
+    #         plt.savefig(self.write_path + "/" + (name) + "." + str(n).zfill(3) + ".png", dpi=1000, bbox_inches='tight')
+    #     plt.show()
 
     def get_uncertainty_field(self, dns_data):
         for orientation in ['front', 'top']:
+
+            axis = 0
+            if orientation == 'front':
+                axis = 0
+            else:
+                axis = 1
 
             tcp_temperature = getattr(self, f"{orientation}_tcp_temperature", None)
             tcp_soot = getattr(self, f"{orientation}_tcp_soot", None)
@@ -295,8 +306,8 @@ class VTcpData:
             dns_soot, _, _ = dns_data.get_field(self.dns_soot_name)
 
             # Compute maximum values along the ray lines
-            dns_maximum_temperature = dns_temperature.max(axis=(self.tcp_axis + 1), keepdims=True)
-            dns_maximum_soot = dns_soot.max(axis=(self.tcp_axis + 1), keepdims=True)
+            dns_maximum_temperature = dns_temperature.max(axis=(axis + 1), keepdims=True)
+            dns_maximum_soot = dns_soot.max(axis=(axis + 1), keepdims=True)
 
             # Compute error values
             temperature_error = np.abs(dns_maximum_temperature - tcp_temperature)
@@ -315,13 +326,20 @@ class VTcpData:
         optical_thickness = getattr(self, f"{orientation}_dns_optical_thickness")
         optical_thickness_frame = optical_thickness[n, :, :, :]
 
+        if orientation == 'front':
+            x_span = 0
+            y_span = 1
+        else:
+            x_span = 0
+            y_span = 2
+
         fig, ax = plt.subplots()
         ax.set_aspect('equal')
         # plot the optical thickness as a slice in the z direction
-        im = ax.imshow(optical_thickness_frame[0, :, :],
+        im = ax.imshow(np.squeeze(optical_thickness_frame),
                        interpolation='none', cmap="inferno",
-                       origin='lower', extent=[self.start_point[0], self.end_point[0],
-                                               self.start_point[1], self.end_point[1]],
+                       origin='lower', extent=[self.start_point[x_span], self.end_point[x_span],
+                                               self.start_point[y_span], self.end_point[y_span]],
                        vmax=optical_thickness_frame.max(), vmin=optical_thickness_frame.min())
         fig.colorbar(im, shrink=0.5, pad=0.05, label=r"Optical Thickness")
         ax.set_xlabel("x [m]")
@@ -352,33 +370,41 @@ class VTcpData:
         dns_soot_frame = dns_maximum_soot[n, :, :, :]
         soot_error_frame = soot_error[n, :, :, :]
 
+
+        if orientation == 'front':
+            x_span = 0
+            y_span = 1
+        else:
+            x_span = 0
+            y_span = 2
+
         fig = plt.figure(figsize=(16, 7))
         gs = gridspec.GridSpec(3, 4, width_ratios=[20, 1, 20, 1], height_ratios=[1, 1, 1])
 
         # Plot dns_temperature
         ax1 = fig.add_subplot(gs[0, 0])
-        im1 = ax1.imshow(dns_temperature_frame[0, :, :], interpolation='none', cmap="inferno",
+        im1 = ax1.imshow(np.squeeze(dns_temperature_frame), interpolation='none', cmap="inferno",
                          origin='lower',
-                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
+                         extent=[self.start_point[x_span], self.end_point[x_span], self.start_point[y_span], self.end_point[y_span]],
                          vmax=4500, vmin=300)
         ax1.set_title("DNS Temperature")
         ax1.set_ylabel("y [m]")
 
         # Plot tcp_temperature
         ax2 = fig.add_subplot(gs[1, 0])
-        im2 = ax2.imshow(tcp_temperature_frame[0, :, :],
+        im2 = ax2.imshow(np.squeeze(tcp_temperature_frame[:, :, :]),
                          interpolation='none', cmap="inferno",
                          origin='lower',
-                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
+                         extent=[self.start_point[x_span], self.end_point[x_span], self.start_point[y_span], self.end_point[y_span]],
                          vmax=4500, vmin=300)
         ax2.set_title("TCP Temperature")
         ax2.set_ylabel("y [m]")
 
         # Plot temperature uncertainty
         ax3 = fig.add_subplot(gs[2, 0])
-        im3 = ax3.imshow(temperature_error_frame[0, :, :], interpolation='none', cmap="inferno",
+        im3 = ax3.imshow(np.squeeze(temperature_error_frame), interpolation='none', cmap="inferno",
                          origin='lower',
-                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
+                         extent=[self.start_point[x_span], self.end_point[x_span], self.start_point[y_span], self.end_point[y_span]],
                          vmax=1000, vmin=0)
         ax3.set_title("Temperature Error Field")
         ax3.set_xlabel("x [m]")
@@ -397,28 +423,28 @@ class VTcpData:
 
         # Plot dns_soot
         ax4 = fig.add_subplot(gs[0, 2])
-        im4 = ax4.imshow(dns_soot_frame[0, :, :], interpolation='none', cmap="inferno",
+        im4 = ax4.imshow(np.squeeze(dns_soot_frame), interpolation='none', cmap="inferno",
                          origin='lower',
-                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
+                         extent=[self.start_point[x_span], self.end_point[x_span], self.start_point[y_span], self.end_point[y_span]],
                          vmax=tcp_soot_frame.max(), vmin=tcp_soot_frame.min())
         ax4.set_title("DNS Soot")
         ax4.set_ylabel("y [m]")
 
         # Plot tcp_soot
         ax5 = fig.add_subplot(gs[1, 2])
-        im5 = ax5.imshow(tcp_soot_frame[0, :, :],
+        im5 = ax5.imshow(np.squeeze(tcp_soot_frame),
                          interpolation='none', cmap="inferno",
                          origin='lower',
-                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
+                         extent=[self.start_point[x_span], self.end_point[x_span], self.start_point[y_span], self.end_point[y_span]],
                          vmax=tcp_soot_frame.max(), vmin=tcp_soot_frame.min())
         ax5.set_title("TCP Soot")
         ax5.set_ylabel("y [m]")
 
         # Plot soot uncertainty
         ax6 = fig.add_subplot(gs[2, 2])
-        im6 = ax6.imshow(soot_error_frame[0, :, :], interpolation='none', cmap="inferno",
+        im6 = ax6.imshow(np.squeeze(soot_error_frame), interpolation='none', cmap="inferno",
                          origin='lower',
-                         extent=[self.start_point[0], self.end_point[0], self.start_point[1], self.end_point[1]],
+                         extent=[self.start_point[x_span], self.end_point[x_span], self.start_point[y_span], self.end_point[y_span]],
                          vmax=soot_error_frame.max(), vmin=soot_error_frame.min())
         ax6.set_title("Soot Error Field")
         ax6.set_xlabel("x [m]")
@@ -562,10 +588,10 @@ if __name__ == "__main__":
     vTCP.get_uncertainty_field(data_3d)
     vTCP.get_optical_thickness(data_3d)
 
-    # vTCP.plot_uncertainty_field(1, orientation='front')
-    # vTCP.plot_uncertainty_field(1, orientation='top')
-    # vTCP.plot_optical_thickness(1, orientation='front')
-    # vTCP.plot_optical_thickness(1, orientation='top')
+    vTCP.plot_uncertainty_field(50, orientation='front')
+    vTCP.plot_uncertainty_field(50, orientation='top')
+    vTCP.plot_optical_thickness(50, orientation='front')
+    vTCP.plot_optical_thickness(50, orientation='top')
     vTCP.plot_line_of_sight(50, data_3d, orientation='front')
     vTCP.plot_line_of_sight(50, data_3d, orientation='top')
 
