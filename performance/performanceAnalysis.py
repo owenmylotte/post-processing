@@ -31,7 +31,9 @@ class PerformanceAnalysis:
         self.rays = rays
         self.set_plot_parameters()
         self.processes_mesh, self.problems_mesh = np.meshgrid(self.processes, self.cell_size)
-        self.models = [self.communication_function, self.ray_collapse_function, self.segment_evaluation_function, self.ray_recombination_function]
+        self.models = [self.communication_function, self.ray_collapse_function, self.segment_evaluation_function,
+                       self.ray_recombination_function]
+        self.model_labels = ["Communication", "Collapse", "Evaluation"]
 
     @staticmethod
     def r_squared_func(y, y_fit):
@@ -40,6 +42,7 @@ class PerformanceAnalysis:
     # Do curve fitting of the data for performance modelling purposes.
     @staticmethod
     def ray_recombination_function(d, p, c, r, alpha, beta, f, g):
+        d = 1
         return r * ((c / p) ** ((d + 1) / d)) * f + alpha * np.log2(p) + r * (c ** ((d - 1) / d)) * (
                 p ** (1 / d)) * 2 * beta + r * ((c / p) ** ((d - 1) / d)) * (p ** (1 / d)) * g
 
@@ -56,7 +59,8 @@ class PerformanceAnalysis:
 
     @staticmethod
     def ray_collapse_function(d, p, c, r, alpha, beta, f, g):
-        return r * ((c / p) ** ((d - 1) / d)) * (p ** (1 / d)) * g
+        d = 1
+        return r * ((c / p) ** ((d - 1) / d)) * ((p ** (1 / d)) * g + f)
 
     # For communication cost models:
     # beta : bandwidth cost of the network
@@ -124,19 +128,20 @@ class PerformanceAnalysis:
                     path = self.base_path + "/" + self.name + "_" + str(self.rays[r]) + "_" + str(
                         self.processes[p]) + "_" + str(
                         self.faces[f]) + ".csv"  # File path
-                    dtypes = {'names': ('stage', 'name', 'time'),
-                              'formats': ('S30', 'S30', 'f4')}
+                    dtypes = {'names': ('stage', 'name', 'count', 'time'),
+                              'formats': ('S30', 'S30', 'i8', 'f4')}
 
                     if exists(path):  # If the path exists then it can be loaded
-                        data = np.loadtxt(path, delimiter=",", dtype=dtypes, skiprows=1, usecols=(0, 1, 4))
+                        data = np.loadtxt(path, delimiter=",", dtype=dtypes, skiprows=1, usecols=(0, 1, 3, 4))
                         lines = len(data)  # Get the length of the csv
                         for e in range(len(self.events)):
 
                             for i in range(lines):  # Iterate through all the lines in the csv
                                 if (data[i][1] == self.events[e]) and (
-                                        data[i][2] > self.times[e, r, p, f]):  # Check current line
+                                        data[i][3] > self.times[e, r, p, f]):  # Check current line
                                     self.times[e, r, p, f] = data[i][
-                                        2]  # If it is, then write the value in column 4 of that line
+                                                                 3] / 5  # data[i][2]  # If it is, then write the value in column 4 of that line
+                                    # (* num calls)
 
                             # If the time is never written then the filter code then don't try to plot it
                             if self.times[e, r, p, f] == 0:
@@ -155,7 +160,7 @@ class PerformanceAnalysis:
         self.processes = np.asarray(self.processes)
         self.faces = np.asarray(self.faces)
         self.rays = np.asarray(self.rays)
-        self.events = np.append(self.events, "Total")
+        # self.events = np.append(self.events, "Total")
 
     # Set bounds for the parameters (all non-negative)
     # param_bounds = ([0, -np.inf, 0, -np.inf, 0], [np.inf, np.inf, np.inf, np.inf, np.inf])
@@ -314,7 +319,6 @@ class PerformanceAnalysis:
             model = self.models[e]
             for n in range(len(self.rays)):
                 for i in range(len(self.faces)):
-
                     d = 1
                     c = 50000
                     r = 30
@@ -340,12 +344,13 @@ class PerformanceAnalysis:
 
                     plt.loglog(x, y, linewidth=1, marker=self.colorarray[i], c="black", markersize=4)
                     # plot fitted curve with a different color or line style
-                    plt.loglog(x, y_fit, '--')
+                    plt.loglog(x, y_fit, '--', label=self.model_labels[e])
 
         plt.yticks(fontsize=10)
         plt.xticks(fontsize=10)
         plt.xlabel(r'MPI Processes', fontsize=10)
         plt.ylabel(r'Time', fontsize=10)
+        plt.legend(loc='center right')
         # plt.legend(self.events)
 
         if not os.path.exists(self.write_path + "/figures"):

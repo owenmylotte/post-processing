@@ -441,56 +441,68 @@ class VTcpData:
                         bbox_inches='tight')
         plt.show()
 
-    def plot_line_of_sight(self, n, data_3d):
+    def plot_line_of_sight(self, n, data_3d, orientation='front'):
+        if orientation not in ['front', 'top']:
+            raise ValueError("orientation should be either 'front' or 'top'")
+
         fig, ax = plt.subplots(3, 1, figsize=(10, 15))
 
         # Create an array for the x-axis.
         x = data_3d.get_coordinates()
 
         dns_temperature, _, _ = data_3d.get_field(self.dns_temperature_name)
+
+        # Dynamically set the attribute names based on orientation
+        tcp_temperature_attr = f"{orientation}_tcp_temperature"
+        tcp_soot_attr = f"{orientation}_tcp_soot"
+        dns_optical_thickness_attr = f"{orientation}_dns_optical_thickness"
+
+        # Fetch the TCP temperature and soot if not already fetched
+        if getattr(self, tcp_temperature_attr) is None:
+            self.get_tcp_temperature()
+        if getattr(self, tcp_soot_attr) is None:
+            self.get_tcp_soot()
+
+        # Fetch the DNS soot if not already fetched
         if self.dns_soot is None:
             self.get_dns_soot(data_3d)
 
-        if self.front_tcp_temperature is None:
-            self.get_tcp_temperature()
-
-        if self.tcp_soot is None:
-            self.get_tcp_soot()
-
-        if self.front_dns_optical_thickness is None:
+        # Fetch optical thickness if not already fetched
+        if getattr(self, dns_optical_thickness_attr) is None:
             self.get_optical_thickness(data_3d)
 
         # Define data for each subplot
         plots_data = [
             {
                 'y': dns_temperature[n, :, :, :],
-                'projected_y': self.front_tcp_temperature,
+                'projected_y': getattr(self, tcp_temperature_attr),
                 'ylabel': "Temperature [K]",
-                'label': 'TCP Temperature',
+                'label': f"{orientation} TCP Temperature",
             },
             {
                 'y': self.dns_soot[n, :, :, :],
-                'projected_y': self.front_tcp_soot,
+                'projected_y': getattr(self, tcp_soot_attr),
                 'ylabel': "Soot Volume Fraction",
-                'label': 'TCP Soot Volume Fraction',
+                'label': f"{orientation} TCP Soot Volume Fraction",
             },
             {
                 'y': (3.72 * self.dns_soot[n, :, :, :] * self.C_0 * dns_temperature[n, :, :, :]) / self.C_2,
-                'projected_y': self.front_dns_optical_thickness[n, :, :, :] / (
+                'projected_y': getattr(self, dns_optical_thickness_attr)[n, :, :, :] / (
                         self.end_point[2 - self.tcp_axis] - self.start_point[2 - self.tcp_axis]),
                 'ylabel': "Absorption Coefficient",
-                'label': 'DNS Absorption Coefficient | Mean Optical Thickness: ' + str(
-                    self.front_dns_optical_thickness.mean()),
+                'label': f"{orientation} DNS Absorption Coefficient | Mean Optical Thickness: " + str(
+                    getattr(self, dns_optical_thickness_attr).mean()),
             }
         ]
 
+        axis = 0
+        if orientation == 'front':
+            axis = 0
+        else:
+            axis = 1
         # Iterate over data and axes to plot each subplot
         for i, data in enumerate(plots_data):
-            ax[i].scatter(x[:, :, :, 2], data['y'], color='k', marker='.', label=data['label'])
-            # [ax[i].axhline(y=j, color='b', linestyle='-',
-            #                label=('Standard Deviation ' + data['label'] if j == 0 else None)) for j
-            #  in [data['projected_y'].mean() + np.std(data['projected_y']),
-            #      data['projected_y'].mean() - np.std(data['projected_y'])]]
+            ax[i].scatter(x[:, :, :, 2 - axis], data['y'], color='k', marker='.', label=data['label'])
             ax[i].axhline(y=data['projected_y'].mean(), color='r', linestyle='-',
                           label='Mean ' + data['label'])
             ax[i].set_title(data['label'] + " along the line of sight")
@@ -502,6 +514,7 @@ class VTcpData:
         ax[2].set_xlabel("Position along the line of sight")
 
         plt.tight_layout()
+
         if self.save:
             plt.savefig(self.write_path + "/" + "line_of_sight" + ".png", dpi=1000, bbox_inches='tight')
         plt.show()
@@ -549,8 +562,11 @@ if __name__ == "__main__":
     vTCP.get_uncertainty_field(data_3d)
     vTCP.get_optical_thickness(data_3d)
 
-    vTCP.plot_uncertainty_field(1)
-    vTCP.plot_optical_thickness(1)
-    vTCP.plot_line_of_sight(1, data_3d)
+    # vTCP.plot_uncertainty_field(1, orientation='front')
+    # vTCP.plot_uncertainty_field(1, orientation='top')
+    # vTCP.plot_optical_thickness(1, orientation='front')
+    # vTCP.plot_optical_thickness(1, orientation='top')
+    vTCP.plot_line_of_sight(50, data_3d, orientation='front')
+    vTCP.plot_line_of_sight(50, data_3d, orientation='top')
 
     print('Done')
