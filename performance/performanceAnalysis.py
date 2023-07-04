@@ -6,6 +6,7 @@ import argparse
 import os
 import scipy
 from scipy import ndimage
+import matplotlib.legend_handler as handler
 
 
 # Template path: "outputs/Scaling2D_30_16_[105, 15].xml"
@@ -137,10 +138,11 @@ class PerformanceAnalysis:
                         for e in range(len(self.events)):
 
                             for i in range(lines):  # Iterate through all the lines in the csv
-                                if (data[i][1] == self.events[e]) and (
-                                        data[i][3] > self.times[e, r, p, f]):  # Check current line
-                                    self.times[e, r, p, f] = data[i][
-                                                                 3] / 5  # data[i][2]  # If it is, then write the value in column 4 of that line
+                                if (data[i][1] == self.events[e]):
+                                    # and (
+                                    #     data[i][3] > self.times[e, r, p, f]):  # Check current line
+                                    self.times[e, r, p, f] += data[i][3] / (5 * self.processes[p])
+                                    # data[i][2]  # If it is, then write the value in column 4 of that line
                                     # (* num calls)
 
                             # If the time is never written then the filter code then don't try to plot it
@@ -315,6 +317,14 @@ class PerformanceAnalysis:
         plt.figure(figsize=(6, 4), num=4)
         # Constant parameters
 
+        # Specify different marker types for y plots
+        markers = ['o', 's', '^']  # e.g., circle, square, and triangle
+        # Specify different line styles for y_fit plots
+        line_styles = ['-', '--', ':']  # e.g., solid, dashed, and dotted
+
+        handles = []  # List to store custom legend handles
+        labels = []  # List to store labels for the legend
+
         for e in range(len(self.events)):
             model = self.models[e]
             for n in range(len(self.rays)):
@@ -331,7 +341,6 @@ class PerformanceAnalysis:
                     init_guess = [1, 1, 1, 1]
 
                     # use curve_fit function to fit data
-                    # the function ray_recombination_function should have two arguments: the x values and the parameters to be fitted
                     params_opt, params_cov = curve_fit(
                         lambda x, alpha, beta, f, g: model(d, x, c, r, alpha, beta, f, g),
                         x, y, p0=init_guess, bounds=(0, np.inf))
@@ -342,16 +351,25 @@ class PerformanceAnalysis:
                     # generate y-values based on the fit
                     y_fit = model(d, x, c, r, *params_opt)
 
-                    plt.loglog(x, y, linewidth=1, marker=self.colorarray[i], c="black", markersize=4)
-                    # plot fitted curve with a different color or line style
-                    plt.loglog(x, y_fit, '--', label=self.model_labels[e])
+                    # Plot y values with different marker types and no line
+                    y_plot, = plt.loglog(x, y, linewidth=0, marker=markers[e], c="black", markersize=4,
+                                         linestyle='None')
+
+                    # plot fitted curve with a different line style and no markers
+                    y_fit_plot, = plt.loglog(x, y_fit, line_styles[e], c="black", markersize=0,
+                                             label=self.model_labels[e])
+
+                    # Append custom legend handles
+                    handles.append((y_plot, y_fit_plot))
+                    labels.append(self.model_labels[e])
 
         plt.yticks(fontsize=10)
         plt.xticks(fontsize=10)
         plt.xlabel(r'MPI Processes', fontsize=10)
         plt.ylabel(r'Time', fontsize=10)
-        plt.legend(loc='center right')
-        # plt.legend(self.events)
+
+        # Create custom legend
+        plt.legend(handles, labels, loc='lower center', handler_map={tuple: handler.HandlerTuple(ndivide=None)}, frameon=False)
 
         if not os.path.exists(self.write_path + "/figures"):
             os.makedirs(self.write_path + "/figures")
@@ -380,7 +398,7 @@ if __name__ == "__main__":
                         help='Event names to measure.')
 
     args = parser.parse_args()
-    rays = np.array([15])
+    rays = np.array([23])
 
     if args.write_path is not None:
         write_path = args.write_path
