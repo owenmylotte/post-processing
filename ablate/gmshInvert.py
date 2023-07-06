@@ -98,8 +98,6 @@ def spherical_shell():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Invert negative Jacobian elements in a mesh file.')
-    parser.add_argument('--file', type=str, required=True, help='Mesh file path (.msh)')
-    parser.add_argument('--chunk_size', type=int, required=True, help='Chunk size for processing determinants')
     args = parser.parse_args()
 
     # Initialize the Gmsh Python API
@@ -108,56 +106,48 @@ if __name__ == "__main__":
     # Create a new model
     gmsh.model.add("new_model")
 
-    # Add two spheres to the model
-    outer_sphere = gmsh.model.occ.addSphere(0, 0, 0, 10)
-    inner_sphere = gmsh.model.occ.addSphere(0, 0, 0, 5)
+    # Define the radii of the spheres
+    outer_radius = 10
+    inner_radius = 5
+    cell_size = 0.5
+    transformation = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-    # Synchronize the data from OCC CAD kernel to Gmsh model
+    # Create the spheres
+    R2_outer = gmsh.model.occ.addSphere(0, 0, 0, outer_radius + cell_size, 1)
+    R2_inner = gmsh.model.occ.addSphere(0, 0, 0, outer_radius, 2)
+
+    # R1_inner = gmsh.model.occ.addSphere(0, 0, 0, inner_radius - cell_size, 8)
+    R1_outer = gmsh.model.occ.addSphere(0, 0, 0, inner_radius, 3)
+
+    shell_inner = gmsh.model.occ.addSphere(0, 0, 0, inner_radius, 4)
+    shell_outer = gmsh.model.occ.addSphere(0, 0, 0, outer_radius, 5)
+
+    # Synchronize before performing boolean operations
     gmsh.model.occ.synchronize()
 
-    # Get the boundaries (surfaces) of the spheres and extract the tags
-    outer_surface = [tag for dim, tag in gmsh.model.getBoundary([(3, outer_sphere)])]
-    inner_surface = [tag for dim, tag in gmsh.model.getBoundary([(3, inner_sphere)])]
+    gmsh.model.occ.fragment([(3, 2)], [(3, i) for i in [1, 3, 4, 5]])
 
-    # Perform the boolean difference operation
-    diff_volume, _ = gmsh.model.occ.cut([(3, outer_sphere)], [(3, inner_sphere)])
+    # Create the shells representing the outer and inner boundaries
+    # R2, _ = gmsh.model.occ.cut([(3, R2_inner)], [(3, R2_outer)])
+    # R1, _ = gmsh.model.occ.cut([(3, R1_outer)], [(3, R1_inner)])
+    # shell, _ = gmsh.model.occ.cut([(3, shell_outer)], [(3, shell_inner)])
 
-    # Synchronize the data from OCC CAD kernel to Gmsh model
+    # Synchronize after performing boolean operations
     gmsh.model.occ.synchronize()
-
-    # Label the outer and inner surfaces as physical groups
-    gmsh.model.addPhysicalGroup(2, outer_surface, tag=1)
-    gmsh.model.setPhysicalName(2, 1, "R2")
-    gmsh.model.addPhysicalGroup(2, inner_surface, tag=2)
-    gmsh.model.setPhysicalName(2, 2, "R1")
-
-    # Add physical groups for the volumes
-    gmsh.model.addPhysicalGroup(3, [diff_volume[0][1]], tag=3)
-    gmsh.model.setPhysicalName(3, 2, "volume")
 
     # Set the characteristic length (mesh size)
-    gmsh.model.mesh.setSize(gmsh.model.getBoundary([(3, diff_volume[0][1])], recursive=True), 3.5)
+    gmsh.option.setNumber("Mesh.CharacteristicLengthMin", cell_size)
+    gmsh.option.setNumber("Mesh.CharacteristicLengthMax", cell_size)
 
-    # Generate the 2D mesh first
-    gmsh.model.mesh.generate(2)
+    # Create physical groups for shells and volume
+    # gmsh.model.mesh.setPeriodic(2, [R2], [shell], transformation)
+    # gmsh.model.mesh.setPeriodic(2, [R1], [shell], transformation)
 
-    # Recombine the mesh
-    gmsh.model.mesh.recombine()
-
-    # Set the subdivision algorithm
-    gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
-
-    # Refine the mesh
-    gmsh.model.mesh.refine()
-
-    # If you still want a 3D mesh, you can generate the 3D mesh after the refinement:
+    # Generate the 3D mesh
     gmsh.model.mesh.generate(3)
 
-    # Optional: Save the mesh to a file
+    # Save the mesh to a file
     gmsh.write("spherical_shell.msh")
 
     # Finalize the Gmsh Python API
     gmsh.finalize()
-
-
-
