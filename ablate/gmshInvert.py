@@ -109,28 +109,44 @@ if __name__ == "__main__":
     # Define the radii of the spheres
     outer_radius = 10
     inner_radius = 5
-    cell_size = 0.5
+    cell_size = 1
     transformation = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
     # Create the spheres
     R2_outer = gmsh.model.occ.addSphere(0, 0, 0, outer_radius + cell_size, 1)
     R2_inner = gmsh.model.occ.addSphere(0, 0, 0, outer_radius, 2)
 
-    # R1_inner = gmsh.model.occ.addSphere(0, 0, 0, inner_radius - cell_size, 8)
     R1_outer = gmsh.model.occ.addSphere(0, 0, 0, inner_radius, 3)
+    R1_inner1 = gmsh.model.occ.addSphere(0, 0, 0, inner_radius - cell_size, 8)
+    R1_inner2 = gmsh.model.occ.addSphere(0, 0, 0, inner_radius - cell_size, 9)
+    R1_inner3 = gmsh.model.occ.addSphere(0, 0, 0, inner_radius - cell_size, 10)
+    inner_array = [R1_inner1, R1_inner2, R1_inner3]
 
-    shell_inner = gmsh.model.occ.addSphere(0, 0, 0, inner_radius, 4)
-    shell_outer = gmsh.model.occ.addSphere(0, 0, 0, outer_radius, 5)
+    # shell_inner = gmsh.model.occ.addSphere(0, 0, 0, inner_radius, 4)
+    # shell_outer = gmsh.model.occ.addSphere(0, 0, 0, outer_radius, 5)
 
     # Synchronize before performing boolean operations
     gmsh.model.occ.synchronize()
 
-    gmsh.model.occ.fragment([(3, 2)], [(3, i) for i in [1, 3, 4, 5]])
+    shell = [0, 0, 0]
 
-    # Create the shells representing the outer and inner boundaries
-    # R2, _ = gmsh.model.occ.cut([(3, R2_inner)], [(3, R2_outer)])
-    # R1, _ = gmsh.model.occ.cut([(3, R1_outer)], [(3, R1_inner)])
-    # shell, _ = gmsh.model.occ.cut([(3, shell_outer)], [(3, shell_inner)])
+    for i in [1, 2, 3]:
+        # Create the shells representing the outer and inner boundaries
+        shell[i-1], _ = gmsh.model.occ.cut([(3, i)], [(3, inner_array[i-1])])
+
+
+    # Synchronize before performing boolean operations
+    gmsh.model.occ.synchronize()
+
+    gmsh.model.occ.fragment([(3, 1)], [(3, i) for i in [2, 3]])
+
+    gmsh.model.occ.synchronize()
+
+    # gmsh.model.setPhysicalName(3, 1, "R2")
+    #
+    # gmsh.model.setPhysicalName(3, 2, "volume")
+    #
+    # gmsh.model.setPhysicalName(3, 3, "R1")
 
     # Synchronize after performing boolean operations
     gmsh.model.occ.synchronize()
@@ -139,15 +155,12 @@ if __name__ == "__main__":
     gmsh.option.setNumber("Mesh.CharacteristicLengthMin", cell_size)
     gmsh.option.setNumber("Mesh.CharacteristicLengthMax", cell_size)
 
-    # Create physical groups for shells and volume
-    # gmsh.model.mesh.setPeriodic(2, [R2], [shell], transformation)
-    # gmsh.model.mesh.setPeriodic(2, [R1], [shell], transformation)
-
     # Generate the 3D mesh
+    gmsh.option.setNumber("Mesh.HighOrderIterMax", 1000000)
     gmsh.model.mesh.generate(3)
 
     # Save the mesh to a file
-    gmsh.write("spherical_shell.msh")
+    gmsh.write("test_thing.msh")
 
     # Finalize the Gmsh Python API
     gmsh.finalize()

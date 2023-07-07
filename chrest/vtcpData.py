@@ -497,6 +497,13 @@ class VTcpData:
         if getattr(self, dns_optical_thickness_attr) is None:
             self.get_optical_thickness(data_3d)
 
+        if orientation == 'front':
+            x_span = 0
+            y_span = 1
+        else:
+            x_span = 0
+            y_span = 2
+
         # Define data for each subplot
         plots_data = [
             {
@@ -514,7 +521,7 @@ class VTcpData:
             {
                 'y': (3.72 * self.dns_soot[n, :, :, :] * self.C_0 * dns_temperature[n, :, :, :]) / self.C_2,
                 'projected_y': getattr(self, dns_optical_thickness_attr)[n, :, :, :] / (
-                        self.end_point[2 - self.tcp_axis] - self.start_point[2 - self.tcp_axis]),
+                        self.end_point[y_span] - self.start_point[y_span]),
                 'ylabel': "Absorption Coefficient",
                 'label': f"{orientation} DNS Absorption Coefficient | Mean Optical Thickness: " + str(
                     getattr(self, dns_optical_thickness_attr).mean()),
@@ -587,6 +594,8 @@ if __name__ == "__main__":
     data_3d = ChrestData(input['base_path'] + "/" + input['dns'])
     vTCP.get_uncertainty_field(data_3d)
     vTCP.get_optical_thickness(data_3d)
+
+    #%% Change which functions are called here to change which plots are shown.
 
     vTCP.plot_uncertainty_field(50, orientation='front')
     vTCP.plot_uncertainty_field(50, orientation='top')

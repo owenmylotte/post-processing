@@ -34,7 +34,7 @@ class PerformanceAnalysis:
         self.processes_mesh, self.problems_mesh = np.meshgrid(self.processes, self.cell_size)
         self.models = [self.communication_function, self.ray_collapse_function, self.segment_evaluation_function,
                        self.ray_recombination_function]
-        self.model_labels = ["Communication", "Collapse", "Evaluation"]
+        self.model_labels = [r"$T_{comm.}$", r"$T_{coll.}$", r"$T_{seg.eval.}$"]
 
     @staticmethod
     def r_squared_func(y, y_fit):
@@ -43,24 +43,24 @@ class PerformanceAnalysis:
     # Do curve fitting of the data for performance modelling purposes.
     @staticmethod
     def ray_recombination_function(d, p, c, r, alpha, beta, f, g):
-        d = 1
+        d = 3
         return r * ((c / p) ** ((d + 1) / d)) * f + alpha * np.log2(p) + r * (c ** ((d - 1) / d)) * (
                 p ** (1 / d)) * 2 * beta + r * ((c / p) ** ((d - 1) / d)) * (p ** (1 / d)) * g
 
     @staticmethod
     def segment_evaluation_function(d, p, c, r, alpha, beta, f, g):
-        d = 1
+        d = 3
         return r * ((c / p) ** ((d + 1) / d)) * f
 
     @staticmethod
     def communication_function(d, p, c, r, alpha, beta, f, g):
-        d = 1
+        d = 3
         return alpha * np.log2(p) + r * (c ** ((d - 1) / d)) * (
                 p ** (1 / d)) * 2 * beta
 
     @staticmethod
     def ray_collapse_function(d, p, c, r, alpha, beta, f, g):
-        d = 1
+        d = 3
         return r * ((c / p) ** ((d - 1) / d)) * ((p ** (1 / d)) * g + f)
 
     # For communication cost models:
@@ -113,6 +113,7 @@ class PerformanceAnalysis:
                            "."]
         self.markerarray = [".", "1", "P", "*"]
         plt.rcParams["font.family"] = "Noto Serif CJK JP"
+        plt.rc('mathtext', fontset='dejavuserif')
 
         f = lambda m, c: plt.plot([], [], marker=m, color=c, ls="none")[0]
         handles = [f(self.markerarray[i], "k") for i in range(len(self.markerarray))]
@@ -312,7 +313,7 @@ class PerformanceAnalysis:
                         dpi=1500, bbox_inches='tight')
             plt.show()
 
-    def plot_time(self):
+    def plot_time(self, rays):
         # Initialization Strong scaling analysis
         plt.figure(figsize=(6, 4), num=4)
         # Constant parameters
@@ -329,9 +330,9 @@ class PerformanceAnalysis:
             model = self.models[e]
             for n in range(len(self.rays)):
                 for i in range(len(self.faces)):
-                    d = 1
-                    c = 50000
-                    r = 30
+                    d = 3
+                    c = 384750
+                    r = 450
 
                     mask = np.isfinite(self.times[e, n, :, i])
                     x = self.processes[mask]
@@ -341,12 +342,15 @@ class PerformanceAnalysis:
                     init_guess = [1, 1, 1, 1]
 
                     # use curve_fit function to fit data
+                    # the function ray_recombination_function should have two arguments:
+                    # the x values and the parameters to be fitted
                     params_opt, params_cov = curve_fit(
                         lambda x, alpha, beta, f, g: model(d, x, c, r, alpha, beta, f, g),
                         x, y, p0=init_guess, bounds=(0, np.inf))
 
                     print(
-                        f"Optimal parameters for event {self.events[e]} are: alpha={params_opt[0]}, beta={params_opt[1]}, f={params_opt[2]}, g={params_opt[3]}")
+                        f"Optimal parameters for event {self.events[e]} are: alpha={params_opt[0]},"
+                        f" beta={params_opt[1]}, f={params_opt[2]}, g={params_opt[3]}")
 
                     # generate y-values based on the fit
                     y_fit = model(d, x, c, r, *params_opt)
@@ -366,7 +370,7 @@ class PerformanceAnalysis:
         plt.yticks(fontsize=10)
         plt.xticks(fontsize=10)
         plt.xlabel(r'MPI Processes', fontsize=10)
-        plt.ylabel(r'Time', fontsize=10)
+        plt.ylabel(r'Time $[s]$', fontsize=10)
 
         # Create custom legend
         plt.legend(handles, labels, loc='lower center', handler_map={tuple: handler.HandlerTuple(ndivide=None)}, frameon=False)
@@ -374,7 +378,7 @@ class PerformanceAnalysis:
         if not os.path.exists(self.write_path + "/figures"):
             os.makedirs(self.write_path + "/figures")
 
-        plt.savefig(self.write_path + "/figures/" + self.name + str(self.events[e]) + '_times.png',
+        plt.savefig(self.write_path + "/figures/" + self.name + "_" + str(rays) + "_" + str(self.events[e]) + '_times.png',
                     dpi=1500, bbox_inches='tight')
         plt.show()
 
@@ -398,7 +402,7 @@ if __name__ == "__main__":
                         help='Event names to measure.')
 
     args = parser.parse_args()
-    rays = np.array([23])
+    rays = np.array([15])
 
     if args.write_path is not None:
         write_path = args.write_path
@@ -412,7 +416,7 @@ if __name__ == "__main__":
     # scaling_data.plot_strong_scaling(None)
     # scaling_data.plot_weak_scaling(0, 20.0)
     # scaling_data.plot_static_scaling()
-    scaling_data.plot_time()
+    scaling_data.plot_time(int(rays))
 
     # import numpy as np
     # import matplotlib.pyplot as plt
