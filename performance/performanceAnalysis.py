@@ -1,3 +1,4 @@
+import matplotlib
 import numpy as np  # for matrix manipulation
 import matplotlib.pyplot as plt  # for plotting
 from os.path import exists
@@ -7,6 +8,7 @@ import os
 import scipy
 from scipy import ndimage
 import matplotlib.legend_handler as handler
+import tikzplotlib
 
 
 # Template path: "outputs/Scaling2D_30_16_[105, 15].xml"
@@ -18,7 +20,7 @@ import matplotlib.legend_handler as handler
 class PerformanceAnalysis:
 
     def __init__(self, base_path=None, name=None, processes=None, faces=None, cell_size=None, rays=None, events=None,
-                 write_path=None):
+                 write_path=None, dimensions=None):
         self.times = None
         self.markerarray = None
         self.colorarray = None
@@ -28,8 +30,9 @@ class PerformanceAnalysis:
         self.processes = processes
         self.faces = faces
         self.cell_size = cell_size
+        self.dimensions = dimensions
         self.events = np.asarray(events, dtype=bytes)
-        self.rays = rays
+        self.rays = int(rays)
         self.set_plot_parameters()
         self.processes_mesh, self.problems_mesh = np.meshgrid(self.processes, self.cell_size)
         self.models = [self.communication_function, self.ray_collapse_function, self.segment_evaluation_function,
@@ -43,68 +46,21 @@ class PerformanceAnalysis:
     # Do curve fitting of the data for performance modelling purposes.
     @staticmethod
     def ray_recombination_function(d, p, c, r, alpha, beta, f, g):
-        d = 3
         return r * ((c / p) ** ((d + 1) / d)) * f + alpha * np.log2(p) + r * (c ** ((d - 1) / d)) * (
                 p ** (1 / d)) * 2 * beta + r * ((c / p) ** ((d - 1) / d)) * (p ** (1 / d)) * g
 
     @staticmethod
     def segment_evaluation_function(d, p, c, r, alpha, beta, f, g):
-        d = 3
         return r * ((c / p) ** ((d + 1) / d)) * f
 
     @staticmethod
     def communication_function(d, p, c, r, alpha, beta, f, g):
-        d = 3
         return alpha * np.log2(p) + r * (c ** ((d - 1) / d)) * (
                 p ** (1 / d)) * 2 * beta
 
     @staticmethod
     def ray_collapse_function(d, p, c, r, alpha, beta, f, g):
-        d = 3
-        return r * ((c / p) ** ((d - 1) / d)) * ((p ** (1 / d)) * g + f)
-
-    # For communication cost models:
-    # beta : bandwidth cost of the network
-    # n : size of the data
-    # p : number of processes
-    # alpha : latency cost of the network
-    # gamma : cost of computation
-
-    @staticmethod
-    def broadcast(p, n, alpha, beta):
-        return np.log2(p) * (3.0 * alpha + n * beta)
-
-    @staticmethod
-    def reduce(p, n, alpha, beta, gamma):  # Additional cost associated with computation of reduction.
-        return np.log2(p) * (3.0 * alpha + n * beta + n * gamma)
-
-    @staticmethod
-    def scatter(p, n, alpha, k, beta):  # And gather
-        return 3.0 * alpha * np.log2(p) + ((p - 1.0) * n * beta) / p
-
-    @staticmethod
-    def gather(p, n, alpha, k, beta):  # And gather
-        return 3.0 * alpha * np.log2(p) + ((p - 1.0) * n * beta) / p
-
-    @staticmethod
-    def bidirectional_all_gather(p, n, alpha, beta):
-        return 3.0 * alpha * np.log2(p) + (n * beta)
-
-    @staticmethod
-    def bidirectional_reduce_scatter(p, n, alpha, beta, gamma):
-        return np.log2(p) * 3.0 * alpha + ((p - 1.0) / p) * n * (beta + gamma)
-
-    @staticmethod
-    def bucket_all_gather(p, n, alpha, beta):
-        return p * alpha + ((p - 1.0) / p) * n * beta
-
-    @staticmethod
-    def bucket_reduce_scatter(p, n, alpha, beta, gamma):
-        return p * alpha + ((p - 1.0) / p) * n * (beta + gamma)
-
-    @staticmethod
-    def all_reduce(p, n, alpha, beta, gamma):
-        return np.log2(p) * (3.0 * alpha + n * beta + n * gamma)
+        return r * (c / p) * ((p ** (1 / d)) * g + f)
 
     def set_plot_parameters(self):
         # Set up plotting options that must be defined by the user
@@ -112,7 +68,14 @@ class PerformanceAnalysis:
                            ".", ".", ".", ".", ".", ".",
                            "."]
         self.markerarray = [".", "1", "P", "*"]
-        plt.rcParams["font.family"] = "Noto Serif CJK JP"
+        # Direct input
+        matplotlib.rcParams.update({
+            "pgf.texsystem": "pdflatex",
+            'font.family': 'serif',
+            'text.usetex': True,
+            'pgf.rcfonts': False,
+            'axes.unicode_minus': False,
+        })
         plt.rc('mathtext', fontset='dejavuserif')
 
         f = lambda m, c: plt.plot([], [], marker=m, color=c, ls="none")[0]
@@ -121,13 +84,13 @@ class PerformanceAnalysis:
 
     def load_csv_files(self):
         # Create arrays which the parsed information will be stored inside: Whatever information is desired
-        self.times = np.zeros([len(self.events), len(self.rays), len(self.processes), len(self.faces)])
+        self.times = np.zeros([len(self.events), 1, len(self.processes), len(self.faces)])
         # Iterate through the arrays to get information out of the files
-        for r in range(len(self.rays)):
+        for r in range(1):
             for p in range(len(self.processes)):
                 for f in range(len(self.faces)):
                     # Create strings which represent the file names of the outputs
-                    path = self.base_path + "/" + self.name + "_" + str(self.rays[r]) + "_" + str(
+                    path = self.base_path + "/" + self.name + "_" + str(self.rays) + "_" + str(
                         self.processes[p]) + "_" + str(
                         self.faces[f]) + ".csv"  # File path
                     dtypes = {'names': ('stage', 'name', 'count', 'time'),
@@ -173,7 +136,7 @@ class PerformanceAnalysis:
         for e in range(len(self.events)):
             # Initialization static scaling analysis
             plt.figure(figsize=(10, 6), num=1)
-            for n in range(len(rays)):
+            for n in range(1):
                 for i in range(len(self.processes)):
                     mask = np.isfinite(self.times[e, n, i, :])
                     x = self.cell_size
@@ -230,7 +193,7 @@ class PerformanceAnalysis:
         plt.figure(figsize=(6, 4), num=4)
         # plt.title("Solve Strong Scaling" + dims, pad=1)
         for e in range(len(self.events)):
-            for n in range(len(rays)):
+            for n in range(1):
                 for i in range(len(self.faces)):
                     mask = np.isfinite(self.times[e, n, :, i])
                     x = self.processes
@@ -313,7 +276,7 @@ class PerformanceAnalysis:
                         dpi=1500, bbox_inches='tight')
             plt.show()
 
-    def plot_time(self, rays):
+    def plot_time(self):
         # Initialization Strong scaling analysis
         plt.figure(figsize=(6, 4), num=4)
         # Constant parameters
@@ -328,18 +291,18 @@ class PerformanceAnalysis:
 
         for e in range(len(self.events)):
             model = self.models[e]
-            for n in range(len(self.rays)):
+            for n in range(1):
                 for i in range(len(self.faces)):
-                    d = 3
-                    c = 384750
-                    r = 450
+                    d = float(self.dimensions)
+                    c = float(self.cell_size[0])
+                    r = float(self.rays) * float(self.rays) * 2.0
 
                     mask = np.isfinite(self.times[e, n, :, i])
                     x = self.processes[mask]
                     y = self.times[e, n, mask, i]
 
                     # define the initial parameter guess for alpha, beta, f, g
-                    init_guess = [1, 1, 1, 1]
+                    init_guess = [1.0E-2, 1.0E-6, 1.0E-8, 1.0E-8]
 
                     # use curve_fit function to fit data
                     # the function ray_recombination_function should have two arguments:
@@ -356,7 +319,7 @@ class PerformanceAnalysis:
                     y_fit = model(d, x, c, r, *params_opt)
 
                     # Plot y values with different marker types and no line
-                    y_plot, = plt.loglog(x, y, linewidth=0, marker=markers[e], c="black", markersize=4,
+                    y_plot, = plt.loglog(x, y, linewidth=0, marker=markers[e], c="black", markersize=3,
                                          linestyle='None')
 
                     # plot fitted curve with a different line style and no markers
@@ -373,13 +336,16 @@ class PerformanceAnalysis:
         plt.ylabel(r'Time $[s]$', fontsize=10)
 
         # Create custom legend
-        plt.legend(handles, labels, loc='lower center', handler_map={tuple: handler.HandlerTuple(ndivide=None)}, frameon=False)
+        plt.legend(handles, labels, loc='lower center', handler_map={tuple: handler.HandlerTuple(ndivide=None)},
+                   frameon=False)
 
         if not os.path.exists(self.write_path + "/figures"):
             os.makedirs(self.write_path + "/figures")
 
-        plt.savefig(self.write_path + "/figures/" + self.name + "_" + str(rays) + "_" + str(self.events[e]) + '_times.png',
-                    dpi=1500, bbox_inches='tight')
+        tikzplotlib.save(
+            self.write_path + "/figures/" + self.name + "_" + str(self.rays) + "_" + str(
+                self.events[e]) + '_times' + '.tex',
+            axis_height=r'\figH', axis_width=r'\figW')
         plt.show()
 
 
@@ -400,23 +366,26 @@ if __name__ == "__main__":
                         help='Event names to measure.')
     parser.add_argument('--write_to', dest='write_path', type=str, required=False,
                         help='Event names to measure.')
+    parser.add_argument('--dimensions', dest='dimensions', type=int, required=True,
+                        help='Event names to measure.')
+    parser.add_argument('--rays', dest='rays', type=int, required=True,
+                        help='Event names to measure.')
 
     args = parser.parse_args()
-    rays = np.array([15])
 
     if args.write_path is not None:
         write_path = args.write_path
     else:
         write_path = args.base_path
 
-    scaling_data = PerformanceAnalysis(args.base_path, args.name, args.processes,
-                                       args.problems, args.cell_size, rays, args.events, write_path)
+    scaling_data = PerformanceAnalysis(args.base_path, args.name, args.processes, args.problems,
+                                       args.cell_size, args.rays, args.events, write_path, args.dimensions)
     scaling_data.load_csv_files()
     # scaling_data.plot_performance_contour(0)
     # scaling_data.plot_strong_scaling(None)
     # scaling_data.plot_weak_scaling(0, 20.0)
     # scaling_data.plot_static_scaling()
-    scaling_data.plot_time(int(rays))
+    scaling_data.plot_time()
 
     # import numpy as np
     # import matplotlib.pyplot as plt
@@ -461,5 +430,82 @@ if __name__ == "__main__":
     # plt.savefig(savePath + 'PerformanceTradeoffPoint', dpi=1000, bbox_inches='tight')
     # plt.show()
 
-# --path /home/owen/ablateInputs/ScalingTests/csvFiles --name volumetricSFScaling --processes 1 2 4 8 16 32 64 128 256 512 1024 2048 4096 --problems [105,15] [149,21] [297,42] --dof 1575 3129 12474 --events Radiation::Initialize Radiation::EvaluateGains --write_to /home/owen/CLionProjects/ParallelRadiationJCP
-# --path /home/owen/1d_scaling --name irradiation --processes 36 72 144 288 576 1152 2304 --problems [50000] --dof 50000 --events Radiation::EvaluateGains::Communication Radiation::EvaluateGains::Recombination Radiation::EvaluateGains::LocalSegmentIntegration --write_to /home/owen/CLionProjects/ParallelRadiationJCP
+# --path
+# /home/owen/redscatterData
+# --name
+# slab.3D
+# --processes
+# 144
+# 288
+# 576
+# 1152
+# 2304
+# 4608
+# 9216
+# 18432
+# --problems
+# [186,40,40]
+# --dof
+# 297600
+# --events
+# Radiation::EvaluateGains::Comm
+# Radiation::EvaluateGains::Reco
+# Radiation::EvaluateGains::Loca
+# --write_to
+# /home/owen/CLionProjects/ParallelRadiationJCP
+# --dimensions 3
+# --rays 15
+
+# --path
+# /home/owen/redscatterData
+# --name
+# irradiation
+# --processes
+# 36
+# 72
+# 144
+# 288
+# 576
+# 1152
+# 2304
+# 4608
+# 9216
+# --problems
+# [50000]
+# --dof
+# 50000
+# --events
+# Radiation::EvaluateGains::Comm
+# Radiation::EvaluateGains::Reco
+# Radiation::EvaluateGains::Loca
+# --write_to
+# /home/owen/CLionProjects/ParallelRadiationJCP
+# --dimensions 1
+# --rays 23
+
+# --path
+# /home/owen/redscatterData
+# --name
+# equilibrium.planar
+# --processes
+# 36
+# 72
+# 144
+# 288
+# 576
+# 1152
+# 2304
+# 4608
+# 9216
+# --problems
+# [50000]
+# --dof
+# 50000
+# --events
+# Radiation::EvaluateGains::Comm
+# Radiation::EvaluateGains::Reco
+# Radiation::EvaluateGains::Loca
+# --write_to
+# /home/owen/CLionProjects/ParallelRadiationJCP
+# --dimensions 1
+# --rays 23
