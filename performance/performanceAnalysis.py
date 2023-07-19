@@ -37,7 +37,7 @@ class PerformanceAnalysis:
         self.processes_mesh, self.problems_mesh = np.meshgrid(self.processes, self.cell_size)
         self.models = [self.communication_function, self.ray_collapse_function, self.segment_evaluation_function,
                        self.ray_recombination_function]
-        self.model_labels = [r"$T_{comm.}$", r"$T_{coll.}$", r"$T_{seg.eval.}$"]
+        self.model_labels = [r"$T_{comm.}$", r"$T_{coll.}$", r"$T_{seg.eval.} + T_{quad.}$"]
 
     @staticmethod
     def r_squared_func(y, y_fit):
