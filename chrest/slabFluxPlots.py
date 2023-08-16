@@ -3,9 +3,18 @@ import matplotlib.pyplot as plt  # for plotting
 import matplotlib.font_manager
 import matplotlib.ticker as ticker
 import tikzplotlib
-from chrest.chrestData import ChrestData
+from chrestData import ChrestData
+from chrest.xdmfGenerator import XdmfGenerator
+import scipy.io
 
-# Define a variable to hold the flux averages.
+file_path = '/Users/owen/Downloads/radHFLowG.mat'
+
+mat = scipy.io.loadmat(file_path)
+experimental_data = mat['totIntensity']
+experimental_data *= 1.E3  # Convert to watts per meter squared.
+print(experimental_data)
+
+# %% Define a variable to hold the flux averages.
 flux_averages = np.zeros(3)  # This will be indexed based on the following definitions
 experimental_index = 0
 original_compute_index = 1
@@ -15,13 +24,14 @@ magic_index = 10  # TODO: Update this with the index of the slice which the boun
 # %% Take experimental data and plot contour.
 # TODO: Read in the experimental data from the matlab file in whatever encoding it's currently saved in.
 # Compute the average of the experimental data computed from the tcp
-flux_averages[experimental_index] = 0  # TODO: Take the average of the experimental data.
+flux_averages[experimental_index] = np.average(experimental_data)  # TODO: Take the average of the experimental data.
 
 # %% Take the heat flux in from ablate data.
 # Define the slab flux data name as whatever is saved in the data file.
-slab_flux_name = "Slab Flux Name"  # TODO: Update this with the actual slab flux name.
+slab_flux_name = "flux"  # TODO: Update this with the actual slab flux name.
 
-data_boundary = ChrestData(input['base_path'] + "/" + input['dns'])
+data_boundary = ChrestData(
+    "/Users/owen/paraffinPpms/_3dSlabBurner_2023-08-03_10ppm/slab boundary_monitor" + "/" + "slab boundary_monitor.00097.chrest/slab boundary_monitor.00097.chrest.00000.hdf5")
 flux = data_boundary.get_field(slab_flux_name)
 
 # THIS CAN BE USED AS REFERENCE FOR IMPLEMENTING THE CHREST FORMAT FUNCTIONS.
