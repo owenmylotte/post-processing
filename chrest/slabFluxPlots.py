@@ -22,13 +22,12 @@ dns_index = 2
 magic_index = 10  # TODO: Update this with the index of the slice which the boundary sits on.
 
 # %% Take experimental data and plot contour.
-# TODO: Read in the experimental data from the matlab file in whatever encoding it's currently saved in.
 # Compute the average of the experimental data computed from the tcp
-flux_averages[experimental_index] = np.average(experimental_data)  # TODO: Take the average of the experimental data.
+flux_averages[experimental_index] = np.average(experimental_data)  # Take the average of the experimental data.
 
 # %% Take the heat flux in from ablate data.
 # Define the slab flux data name as whatever is saved in the data file.
-slab_flux_name = "flux"  # TODO: Update this with the actual slab flux name.
+slab_flux_name = "flux"
 
 data_boundary = ChrestData(
     "/Users/owen/paraffinPpms/_3dSlabBurner_2023-08-03_10ppm/slab boundary_monitor" + "/" + "slab boundary_monitor.00097.chrest/slab boundary_monitor.00097.chrest.00000.hdf5")
@@ -47,7 +46,6 @@ print(flux_averages)
 # TODO: Mesh grid stuff with the slice of the contour on the magic index.
 # plt.plot(flux[:, :, magic_index])  # TODO: Update this to plot a proper contour.
 
-# %% Compute the error on the heat flux between the experimental, previous model, and current model.
-# TODO: Error on between each of the entries in the fluxes.
+# %% Compute the error on the heat flux between the experimental and current model.
 error = (flux_averages[0] - flux_averages[2]) / flux_averages[0]
 print(error)
