@@ -19,7 +19,7 @@ experimental_data *= 1.E6  # Convert to watts per meter squared.
 flux_averages = np.zeros(4)  # This will be indexed based on the following definitions
 experimental_index = 0
 dns_index = 1  # 10, 30, and 60 ppm respectively will be stored on and after.
-magic_index = 30  # TODO: Update this with the index of the slice which the boundary sits on.
+magic_index = 30  # Index of the slice which the boundary sits on.
 
 # %% Take experimental data and plot contour.
 # Compute the average of the experimental data computed from the tcp
