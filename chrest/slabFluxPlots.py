@@ -61,14 +61,14 @@ start_index = (np.round(cells * slab_start / box_dims)).astype(int)
 end_index = (np.round(cells * slab_end / box_dims)).astype(int)
 
 # %% Plot heat flux contour on top plot.
-fig, axarr = plt.subplots(4, 1, figsize=(8, 15))
+fig, axarr = plt.subplots(4, 1, figsize=(8, 6))
 
 # Define the x and y range assuming it's a regular grid
 # y, x = np.mgrid[0:1:50j, 0:1:200j]
-y, x = np.mgrid[0:16, 0:140]
+y, x = np.mgrid[0:10:16j, 0:80:140j]
 
 # Define the x and y range for experimental_data
-y_exp, x_exp = np.mgrid[0:1:9j, 0:1:80j]
+y_exp, x_exp = np.mgrid[0:10:9j, 0:80:80j]
 
 # Specify the contour levels
 contour_levels = np.linspace(0, 3, 31)
@@ -82,20 +82,23 @@ for i in range(3):
     #                      levels=contour_levels, colors='black')  # Contour plot with specified levels.
     axarr[i].clabel(c, inline=1, fontsize=10)
     # axarr[i].set_title(f"Heat Flux Contour for {file_names[i]}")
-    axarr[i].set_xlabel("X-axis label")
-    axarr[i].set_ylabel("Y-axis label")
+    axarr[i].set_xlabel(r"x $[m]$")
+    axarr[i].set_ylabel(r"y $[m]$")
+    axarr[i].set_aspect(1)  # Set the aspect ratio to 10 by 80.
 
 # Contour plot for experimental_data
 experimental_data *= 1.E-6
 contour_levels_exp = np.linspace(np.min(experimental_data), np.max(experimental_data), 10)  # Adjust if needed.
 c = axarr[3].contour(x_exp, y_exp, experimental_data, levels=contour_levels_exp, colors='black')
 axarr[3].clabel(c, inline=1, fontsize=10)
-axarr[3].set_xlabel("X-axis label for Experimental Data")
-axarr[3].set_ylabel("Y-axis label for Experimental Data")
+axarr[3].set_xlabel(r"x $[m]$")
+axarr[3].set_ylabel(r"y $[m]$")
+axarr[3].set_aspect(1)
 
+# plt.subplots_adjust(hspace=0.5)
 plt.tight_layout()
+tikzplotlib.save("flux_contours.tex")
 plt.show()
-
 # %% Compute the error on the heat flux between the experimental and current model.
 
 # flux_averages[2] = flux[2, 17:33, magic_index, 45:185]
